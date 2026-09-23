@@ -1,13 +1,10 @@
 {
   "rewrites": [
     {
-      "source": "/api/:path*",
-      "destination": "https://goldsignals.yobbytech.com*"
-    },
-    {
-      "source": "/((?!api/).*)" ,
+      "source": "/((?!.*\\.).*)",
       "destination": "/index.html"
     }
   ]
 }
+
 
