@@ -54,7 +54,7 @@ function drawZone(ctx, env, z, tag, opts = {}) {
   if (x2 <= 0 || x1 >= W) return;
   const col = opts.color || zoneColors(z);
   const fresh = z.state === "fresh";
-  ctx.fillStyle = rgba(col, opts.fill ?? (fresh ? 0.14 : 0.08));
+  ctx.fillStyle = rgba(col, opts.fill ?? (fresh ? 0.09 : 0.055));
   ctx.fillRect(x1, y1, x2 - x1, y2 - y1);
   ctx.save();
   ctx.strokeStyle = rgba(col, opts.stroke ?? (fresh ? 0.85 : 0.5));

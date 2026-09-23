@@ -17,6 +17,15 @@ const LAYER_DEFS = [
 ];
 export const DEFAULT_LAYERS = { own: true, htf: true, setup: true, trigger: true, levels: true, sessions: true };
 
+/** Sensible overlays per timeframe so candles stay readable (you can still toggle anything). */
+export function presetFor(tf) {
+  const off = { own: false, htf: false, setup: false, trigger: false, levels: false, sessions: false };
+  if (["1d", "1w"].includes(tf)) return { ...off, own: true, levels: true };
+  if (tf === "4h") return { ...off, own: true, levels: true, trigger: true };
+  if (tf === "1h") return { ...off, own: true, htf: true, levels: true, trigger: true, sessions: true };
+  return { ...off, own: true, setup: true, trigger: true, levels: true, sessions: true };   // 1m-30m
+}
+
 function LayerChips({ layers, setLayers, tf }) {
   // on 4H the "4H map" IS the own-TF layer, on 1H the "1H setup" is - don't offer duplicates
   const defs = LAYER_DEFS.filter((l) => !(l.key === "htf" && tf === "4h") && !(l.key === "setup" && tf === "1h"));
@@ -30,6 +39,11 @@ function LayerChips({ layers, setLayers, tf }) {
           {l.label}
         </button>
       ))}
+      <span className="w-px h-4 bg-border mx-0.5" />
+      <button onClick={() => setLayers(Object.fromEntries(LAYER_DEFS.map((l) => [l.key, false])))}
+        title="Candles only" className="text-xs px-2.5 py-1 rounded-full border border-border text-gray-400 hover:text-gray-100">Clean</button>
+      <button onClick={() => setLayers({ ...DEFAULT_LAYERS })}
+        className="text-xs px-2.5 py-1 rounded-full border border-border text-gray-400 hover:text-gray-100">All</button>
     </div>
   );
 }
@@ -59,8 +73,9 @@ function ExpandBtn({ onClick }) {
 /** Full-viewport chart with its own timeframe + layer controls. Esc closes. */
 function Expanded({ tf: tf0, layers: l0, onClose }) {
   const { prefs } = useLive();
-  const [tf, setTf] = useState(tf0);
+  const [tf, setTfRaw] = useState(tf0);
   const [layers, setLayers] = useState(l0);
+  const setTf = (t) => { setTfRaw(t); setLayers(presetFor(t)); };
   const [fs, setFs] = useState(false);
   const info = symbolInfo(prefs.symbol);
 
@@ -109,8 +124,9 @@ function Expanded({ tf: tf0, layers: l0, onClose }) {
 
 export default function ChartPanel({ tall = false }) {
   const { prefs, setPref, live } = useLive();
-  const [layers, setLayers] = useState(DEFAULT_LAYERS);
+  const [layers, setLayers] = useState(() => presetFor(prefs.chartTF));
   const [expanded, setExpanded] = useState(null); // {tf, layers}
+  const changeTf = (v) => { setPref("chartTF", v); setLayers(presetFor(v)); };
   const a = live?.analysis;
   const sess = live?.sessions;
   const close = React.useCallback(() => setExpanded(null), []);
@@ -140,17 +156,17 @@ export default function ChartPanel({ tall = false }) {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           <div className="bg-panel border border-border rounded-2xl overflow-hidden">
             <PanelTitle step="1-2" title="4H direction + map" bias={a?.["4h"]?.bias}
-              right={<div className="flex items-center gap-2"><Chip tone="gray">4H</Chip><ExpandBtn onClick={() => setExpanded({ tf: "4h", layers: { ...DEFAULT_LAYERS } })} /></div>} />
+              right={<div className="flex items-center gap-2"><Chip tone="gray">4H</Chip><ExpandBtn onClick={() => setExpanded({ tf: "4h", layers: presetFor("4h") })} /></div>} />
             <LiveChart tf="4h" layers={L4} heightClass={h} limit={300} />
           </div>
           <div className="bg-panel border border-border rounded-2xl overflow-hidden">
             <PanelTitle step="3" title="1H structure + liquidity" bias={a?.["1h"]?.bias}
-              right={<div className="flex items-center gap-2"><Chip tone="gray">1H</Chip><ExpandBtn onClick={() => setExpanded({ tf: "1h", layers: { ...DEFAULT_LAYERS } })} /></div>} />
+              right={<div className="flex items-center gap-2"><Chip tone="gray">1H</Chip><ExpandBtn onClick={() => setExpanded({ tf: "1h", layers: presetFor("1h") })} /></div>} />
             <LiveChart tf="1h" layers={L1} heightClass={h} limit={400} />
           </div>
           <div className="bg-panel border border-border rounded-2xl overflow-hidden lg:col-span-2">
             <PanelTitle step="4" title={`${prefs.entryTF} entry trigger`}
-              right={<div className="flex items-center gap-2"><span className="text-[11px] text-gray-500 hidden sm:inline">{sess?.label}</span><ExpandBtn onClick={() => setExpanded({ tf: prefs.entryTF, layers: { ...DEFAULT_LAYERS } })} /></div>} />
+              right={<div className="flex items-center gap-2"><span className="text-[11px] text-gray-500 hidden sm:inline">{sess?.label}</span><ExpandBtn onClick={() => setExpanded({ tf: prefs.entryTF, layers: presetFor(prefs.entryTF) })} /></div>} />
             <LiveChart tf={prefs.entryTF} layers={LE} heightClass={tall ? "h-[340px] md:h-[440px]" : "h-[300px] md:h-[380px]"} limit={400} />
           </div>
         </div>
@@ -162,7 +178,7 @@ export default function ChartPanel({ tall = false }) {
     <div className="bg-panel border border-border rounded-2xl overflow-hidden">
       {expanded && <Expanded tf={expanded.tf} layers={expanded.layers} onClose={close} />}
       <div className="flex flex-wrap items-center justify-between gap-2 px-3 pt-3">
-        <Segmented size="sm" value={prefs.chartTF} onChange={(v) => setPref("chartTF", v)} options={TIMEFRAMES} className="max-w-full" />
+        <Segmented size="sm" value={prefs.chartTF} onChange={changeTf} options={TIMEFRAMES} className="max-w-full" />
         <div className="flex items-center gap-2">{modeSwitch}<ExpandBtn onClick={() => setExpanded({ tf: prefs.chartTF, layers: { ...layers } })} /></div>
       </div>
       <div className="px-3 pt-2.5"><LayerChips layers={layers} setLayers={setLayers} tf={prefs.chartTF} /></div>

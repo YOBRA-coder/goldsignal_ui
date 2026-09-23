@@ -35,6 +35,7 @@ function Result({ r }) {
       <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-3">
         <Stat label="Trades" value={r.total_trades} sub={`${r.wins}W / ${r.losses}L`} />
         <Stat label="Win rate" value={`${r.win_rate}%`} tone={r.win_rate >= 40 ? "bull" : "amber"} sub={`break-even at ${(100 / (1 + (r.params?.rr || 2))).toFixed(0)}%`} />
+        <Stat label="Min agreement used" value={`${r.min_agreement_effective ?? r.stats?.params?.min_agreement}%`} sub={r.min_agreement_effective !== r.stats?.params?.min_agreement ? `adjusted from ${r.stats?.params?.min_agreement}% for 1:${r.stats?.params?.risk_reward}` : "as requested"} />
         <Stat label="Net R" value={`${r.net_r > 0 ? "+" : ""}${r.net_r}R`} tone={r.net_r >= 0 ? "bull" : "bear"} />
         <Stat label="Avg R / trade" value={r.avg_r} tone={r.avg_r >= 0 ? "bull" : "bear"} />
         <Stat label="Profit factor" value={s.profit_factor ?? "—"} />

@@ -1,16 +1,15 @@
 import React, { useEffect, useRef } from "react";
 import { createChart, CrosshairMode } from "lightweight-charts";
 import { drawOverlay } from "../lib/chartOverlay";
+import { fmtTime } from "../lib/format";
 
 const fmtTick = (t, type) => {
-  const d = new Date(t * 1000);
-  if (type === 0) return String(d.getFullYear());
-  if (type === 1) return d.toLocaleString([], { month: "short" });
-  if (type === 2) return d.toLocaleString([], { day: "numeric", month: "short" });
-  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+  if (type === 0) return fmtTime(t, { year: "numeric", hour: undefined, minute: undefined });
+  if (type === 1) return fmtTime(t, { month: "short", hour: undefined, minute: undefined });
+  if (type === 2) return fmtTime(t, { day: "numeric", month: "short", hour: undefined, minute: undefined });
+  return fmtTime(t);
 };
-const fmtCross = (t) =>
-  new Date(t * 1000).toLocaleString([], { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hour12: false });
+const fmtCross = (t) => fmtTime(t, { day: "2-digit", month: "short" });
 
 /**
  * Candlestick chart + strategy overlay.
@@ -37,13 +36,13 @@ export default function Chart({ candles, analysis, own, tf, layers, marks, preci
       layout: { background: { color: "transparent" }, textColor: "#9ca3af", fontSize: 11 },
       grid: { vertLines: { color: "rgba(35,42,53,0.45)" }, horzLines: { color: "rgba(35,42,53,0.45)" } },
       rightPriceScale: { borderColor: "#232a35", scaleMargins: { top: 0.08, bottom: 0.2 } },
-      timeScale: { borderColor: "#232a35", timeVisible: true, secondsVisible: false, rightOffset: 8, tickMarkFormatter: fmtTick },
+      timeScale: { borderColor: "#232a35", timeVisible: true, secondsVisible: false, rightOffset: 8, barSpacing: 9, minBarSpacing: 2, tickMarkFormatter: fmtTick },
       localization: { timeFormatter: fmtCross },
       crosshair: { mode: CrosshairMode.Normal },
       kineticScroll: { touch: true, mouse: false },
     });
     const series = chart.addCandlestickSeries({
-      upColor: "#12b886", downColor: "#ff4d4f", borderVisible: false,
+      upColor: "#12b886", downColor: "#ff4d4f", borderVisible: true, borderUpColor: "#12b886", borderDownColor: "#ff4d4f",
       wickUpColor: "#12b886", wickDownColor: "#ff4d4f",
     });
     const vol = chart.addHistogramSeries({ priceFormat: { type: "volume" }, priceScaleId: "vol", lastValueVisible: false, priceLineVisible: false });
@@ -197,7 +196,9 @@ export default function Chart({ candles, analysis, own, tf, layers, marks, preci
     setLegend?.(api.current.last);
 
     if (fresh || !range) {
-      chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, data.length - 130), to: data.length + 8 });
+      const w = elRef.current?.clientWidth || 800;
+      const bars = Math.max(40, Math.min(200, Math.round(w / 9)));   // ~9px per candle so candles stay readable
+      chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, data.length - bars), to: data.length + 8 });
       st.viewKey = viewKey;
     } else if (!incremental) {
       const atEdge = range.to >= prevN - 1;

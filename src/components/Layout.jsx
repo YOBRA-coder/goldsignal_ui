@@ -1,13 +1,13 @@
 import React, { useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
-import { AlertTriangle, BarChart3, Bell, CheckCircle2, CircleUser, FlaskConical, Info, LayoutDashboard,
-  LineChart, ListChecks, LogOut, RefreshCw, X, XCircle, Zap } from "lucide-react";
+import { AlertTriangle, BarChart3, Bell, CheckCircle2, CircleUser, FlaskConical, GitCompareArrows, Info,
+  LayoutDashboard, LineChart, ListChecks, LogOut, RefreshCw, X, XCircle, Zap } from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
 import { LiveProvider, useLive } from "../context/LiveContext";
 import { Chip, Segmented } from "./ui";
 import LivePrice from "./LivePrice";
 import { ENTRY_TFS, SYMBOLS } from "../lib/constants";
-import { cx, fmtAgo } from "../lib/format";
+import { cx, fmtAgo, timeModeLabel } from "../lib/format";
 
 const NAV = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
@@ -22,6 +22,7 @@ const kindStyle = {
   signal: { icon: Zap, cls: "text-gold border-gold/40 bg-gold/10" },
   win: { icon: CheckCircle2, cls: "text-bull border-bull/40 bg-bull/10" },
   loss: { icon: XCircle, cls: "text-bear border-bear/40 bg-bear/10" },
+  shift: { icon: GitCompareArrows, cls: "text-violet-400 border-violet-400/40 bg-violet-400/10" },
   info: { icon: Info, cls: "text-blue-400 border-blue-400/40 bg-blue-400/10" },
 };
 
@@ -103,7 +104,10 @@ function StatusBanners() {
           <div className="min-w-0 flex-1">
             <b>Data feed problem:</b> <span className="break-words">{error}</span>
             <div className="text-xs text-red-300/80 mt-0.5">
-              Showing the last good data{lastUpdate ? ` (${fmtAgo(Math.floor(lastUpdate / 1000))})` : ""}. Fix: <code className="bg-black/30 px-1 rounded">pip install -U -r requirements.txt</code> then restart the backend.
+              Showing the last good data{lastUpdate ? ` (${fmtAgo(Math.floor(lastUpdate / 1000))})` : ""}.{" "}
+              {/offline|cannot reach/i.test(error)
+                ? <>The backend is not running or crashed — check its terminal, then start it again with <code className="bg-black/30 px-1 rounded">./run_backend.sh</code> (it auto-restarts).</>
+                : <>Fix: <code className="bg-black/30 px-1 rounded">pip install -U -r requirements.txt</code> then restart the backend.</>}
             </div>
           </div>
           <button onClick={refresh} className="text-xs underline shrink-0">Retry</button>
@@ -135,15 +139,16 @@ function TopBar() {
           className="bg-panel border border-border rounded-xl px-2.5 sm:px-3 h-10 text-sm font-semibold outline-none focus:border-gold max-w-[46vw]">
           {SYMBOLS.map((s) => <option key={s.value} value={s.value}>{s.short} · {s.label}</option>)}
         </select>
-        <div className="hidden xl:block px-3 py-1 rounded-xl border border-border bg-panel"><LivePrice /></div>
+        <div className="hidden sm:block px-3 py-1 rounded-xl border border-border bg-panel"><LivePrice /></div>
         <div className="hidden sm:flex items-center gap-2 text-xs text-gray-500">
-          <span>Entry TF</span>
+          <span className="whitespace-nowrap">Entry TF</span>
           <Segmented size="sm" options={ENTRY_TFS} value={prefs.entryTF} onChange={(v) => setPref("entryTF", v)} />
         </div>
         <div className="ml-auto flex items-center gap-2">
           <div className="hidden md:flex items-center gap-2 text-xs text-gray-500">
             <span className={cx("w-2 h-2 rounded-full", d?.stale || !lastUpdate ? "bg-amber-400" : "bg-bull animate-pulse")} />
             {lastUpdate ? `Analysis ${fmtAgo(Math.floor(lastUpdate / 1000))}` : "Connecting…"}
+            <span className="text-gray-600">· {timeModeLabel(prefs.timeMode)}</span>
             {d?.lag_sec != null && <span className="text-gray-600">· feed lag {d.lag_sec < 90 ? `${d.lag_sec}s` : `${Math.round(d.lag_sec / 60)}m`}</span>}
             {d?.demo && <Chip tone="amber">DEMO</Chip>}
           </div>

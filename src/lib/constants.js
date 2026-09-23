@@ -1,10 +1,11 @@
 export const SYMBOLS = [
-  { value: "GC=F", label: "Gold Futures", short: "XAU/USD", note: "COMEX GC=F (best intraday data)", precision: 2 },
-  { value: "XAUUSD=X", label: "Gold Spot", short: "XAU/USD spot", note: "Spot gold (no volume on Yahoo)", precision: 2 },
+  { value: "XAUUSD=X", label: "Gold Spot (matches MT5 XAUUSD)", short: "XAUUSD", note: "Spot gold - same instrument as MT5 (no volume on Yahoo)", precision: 2 },
+  { value: "GC=F", label: "Gold Futures (COMEX)", short: "GC=F", note: "Futures: trades ~$20-40 above spot, has volume", precision: 2 },
   { value: "SI=F", label: "Silver Futures", short: "XAG", note: "COMEX silver", precision: 3 },
   { value: "EURUSD=X", label: "EUR/USD", short: "EURUSD", note: "Forex", precision: 5 },
   { value: "GBPUSD=X", label: "GBP/USD", short: "GBPUSD", note: "Forex", precision: 5 },
   { value: "USDJPY=X", label: "USD/JPY", short: "USDJPY", note: "Forex", precision: 3 },
+  { value: "EURAUD=X", label: "EUR/AUD", short: "EURAUD", note: "Forex", precision: 5 },
 ];
 
 export const TIMEFRAMES = [
@@ -18,7 +19,7 @@ export const TIMEFRAMES = [
   { value: "1w", label: "1W", seconds: 604800 },
 ];
 
-export const ENTRY_TFS = ["5m", "15m", "30m"];
+export const ENTRY_TFS = ["1m", "5m", "15m", "30m"];
 
 export const tfSeconds = (tf) => TIMEFRAMES.find((t) => t.value === tf)?.seconds ?? 900;
 export const symbolInfo = (s) => SYMBOLS.find((x) => x.value === s) ?? { value: s, label: s, short: s, precision: 2 };

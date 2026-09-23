@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { ArrowDownRight, ArrowUpRight, CheckCircle2, Clock, Minus, Target, TrendingDown, TrendingUp } from "lucide-react";
 import { Card, Chip, Ring } from "./ui";
 import { useLive } from "../context/LiveContext";
+import LivePrice from "./LivePrice";
 import { symbolInfo, SESSION_LABELS } from "../lib/constants";
 import { cx, fmtAgo, fmtDateTime, fmtPrice, fmtTime } from "../lib/format";
 
@@ -67,8 +68,8 @@ export default function SignalCard() {
       <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-4 text-sm">
         <Row k="4H bias" v={<span className={s.bias_4h === "bullish" ? "text-bull" : s.bias_4h === "bearish" ? "text-bear" : "text-gray-400"}>{s.bias_4h}</span>} />
         <Row k="1H bias" v={<span className={s.bias_1h === "bullish" ? "text-bull" : s.bias_1h === "bearish" ? "text-bear" : "text-gray-400"}>{s.bias_1h}</span>} />
-        <Row k="Agreement" v={`${s.agreement}% (min ${prefs.minAgreement}%)`} />
-        <Row k="Price" v={fmtPrice(s.last_price, p)} />
+        <Row k="Agreement" v={`${s.agreement}% (min ${(s.min_agreement_effective ?? prefs.minAgreement)}%${s.min_agreement_effective && s.min_agreement_effective !== prefs.minAgreement ? `, adj. for 1:${s.rr}` : ""})`} />
+        <Row k="Price" v={<LivePrice />} />
       </div>
 
       {showPlan && (

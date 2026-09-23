@@ -5,10 +5,31 @@ export function fmtPrice(v, p = 2) {
   return Number(v).toLocaleString(undefined, { minimumFractionDigits: p, maximumFractionDigits: p });
 }
 
+// ---- chart / display clock: my local time, UTC, or the MT5 server clock (New York + 7h = GMT+2/+3)
+let TIME_MODE = "server";
+export const setTimeMode = (m) => { TIME_MODE = m; };
+export const getTimeMode = () => TIME_MODE;
+
+function nyOffsetMs(ms) {
+  const parts = new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hourCycle: "h23", year: "numeric", month: "numeric",
+    day: "numeric", hour: "numeric", minute: "numeric", second: "numeric" }).formatToParts(new Date(ms));
+  const g = (t) => +parts.find((p) => p.type === t).value;
+  return Date.UTC(g("year"), g("month") - 1, g("day"), g("hour"), g("minute"), g("second")) - Math.floor(ms / 1000) * 1000;
+}
+export function serverGmtOffset(ms = Date.now()) { return Math.round(nyOffsetMs(ms) / 3600000 + 7); }
+export function timeModeLabel(mode = TIME_MODE) {
+  if (mode === "utc") return "UTC";
+  if (mode === "server") { const h = serverGmtOffset(); return `MT5 server (GMT${h >= 0 ? "+" : ""}${h})`; }
+  return "My local time";
+}
+
 export function fmtTime(ts, opts = {}) {
   if (!ts) return "—";
-  const d = typeof ts === "number" ? new Date(ts * 1000) : new Date(ts);
-  return d.toLocaleString([], { hour: "2-digit", minute: "2-digit", hour12: false, ...opts });
+  const ms = typeof ts === "number" ? ts * 1000 : new Date(ts).getTime();
+  let d = new Date(ms), tz;
+  if (TIME_MODE === "utc") tz = "UTC";
+  else if (TIME_MODE === "server") { d = new Date(ms + nyOffsetMs(ms) + 7 * 3600000); tz = "UTC"; }
+  return d.toLocaleString([], { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: tz, ...opts });
 }
 
 export function fmtDateTime(ts) {
@@ -39,6 +60,6 @@ export function errText(err) {
   const d = err?.response?.data?.detail;
   if (typeof d === "string") return d;
   if (d?.message) return d.message + (d.diagnostics?.length ? `  (${d.diagnostics[0]})` : "");
-  if (err?.code === "ERR_NETWORK") return "Cannot reach the backend (is uvicorn running on port 8000?)";
+  if (err?.code === "ERR_NETWORK") return "Backend offline: cannot reach the API. Start it with ./run_backend.sh (port 8000).";
   return err?.message || "Something went wrong";
 }

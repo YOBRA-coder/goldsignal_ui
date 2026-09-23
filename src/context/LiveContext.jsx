@@ -1,13 +1,13 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import api from "../api";
-import { errText } from "../lib/format";
+import { errText, setTimeMode } from "../lib/format";
 import { playAlert, unlockAudio } from "../lib/sound";
 
 const LiveCtx = createContext(null);
 export const useLive = () => useContext(LiveCtx);
 
 const DEFAULTS = {
-  symbol: "GC=F", entryTF: "15m", chartTF: "15m", layout: "single",
+  symbol: "XAUUSD=X", entryTF: "15m", chartTF: "15m", layout: "single", timeMode: "server",
   minAgreement: 70, sessionsOnly: true, rr: 2, sound: true, notify: false,
 };
 const POLL_MS = 10000;
@@ -29,11 +29,13 @@ export function LiveProvider({ children }) {
   const [toasts, setToasts] = useState([]);
   const [history, setHistory] = useState([]);
   const [quote, setQuote] = useState(null);
+  const [dataRev, setDataRev] = useState(0);
   const reqId = useRef(0);
   const lastAlertId = useRef(null);
   const symRef = useRef(prefs.symbol);
   const prefsRef = useRef(prefs);
   prefsRef.current = prefs;
+  setTimeMode(prefs.timeMode);
 
   const setPref = useCallback((k, v) => {
     setPrefs((p) => {
@@ -160,10 +162,12 @@ export function LiveProvider({ children }) {
     fetchAlerts();
   }, [fetchAlerts]);
 
+  const bumpData = useCallback(() => { setDataRev((r) => r + 1); fetchLive(); }, [fetchLive]);
+
   const value = useMemo(() => ({
-    prefs, setPref, live, quote, error, loading, lastUpdate, refresh: fetchLive,
+    prefs, setPref, live, quote, dataRev, bumpData, error, loading, lastUpdate, refresh: fetchLive,
     alerts, unseen, markRead, toasts, dismissToast, history, fetchHistory, enableDesktop, sendTest,
-  }), [prefs, setPref, live, quote, error, loading, lastUpdate, fetchLive, alerts, unseen, markRead, toasts,
+  }), [prefs, setPref, live, quote, dataRev, bumpData, error, loading, lastUpdate, fetchLive, alerts, unseen, markRead, toasts,
        dismissToast, history, fetchHistory, enableDesktop, sendTest]);
 
   return <LiveCtx.Provider value={value}>{children}</LiveCtx.Provider>;
