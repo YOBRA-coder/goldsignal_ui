@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { ChevronDown, Check, X, Minus } from "lucide-react";
 import api from "../api";
 import { Card, Chip, Empty, Segmented, Stat } from "../components/ui";
+import ScanLogPanel from "../components/ScanLogPanel";
 import { useLive } from "../context/LiveContext";
 import { cx, errText, fmtDateTime, fmtPrice } from "../lib/format";
 import { symbolInfo } from "../lib/constants";
@@ -114,6 +115,7 @@ export default function Signals() {
           </ul>
         )}
       </Card>
+      <ScanLogPanel />
     </div>
   );
 }

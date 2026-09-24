@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Activity, CheckCircle2, XCircle } from "lucide-react";
 import ChartPanel from "../components/ChartPanel";
 import SignalCard from "../components/SignalCard";
+import BuildingPanel from "../components/BuildingPanel";
 import Checklist from "../components/Checklist";
 import SessionsPanel from "../components/SessionsPanel";
 import MarketWatch from "../components/MarketWatch";
@@ -69,6 +70,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
         <div className="order-1 xl:order-none xl:col-span-4 xl:col-start-9 xl:row-start-1 space-y-4">
           <SignalCard />
+          <BuildingPanel />
           <ActiveTrade />
         </div>
         <div className="order-2 xl:order-none xl:col-span-8 xl:col-start-1 xl:row-start-1 xl:row-span-2 min-w-0">
