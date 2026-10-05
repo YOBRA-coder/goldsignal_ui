@@ -17,7 +17,7 @@ const fmtCross = (t) => fmtTime(t, { day: "2-digit", month: "short" });
  *  analysis : the `analysis` object from /signals/live (4h / 1h / entry / levels / trade)
  *  layers   : {htf, setup, trigger, levels, sessions}
  */
-export default function Chart({ candles, analysis, own, tf, layers, marks, precision = 2, barSeconds = 900,
+export default function Chart({ candles, dataKey, analysis, own, tf, layers, marks, precision = 2, barSeconds = 900,
   viewKey, hasVolume = true, heightClass = "h-[340px] md:h-[460px] xl:h-[540px]" }) {
   const wrapRef = useRef(null);
   const elRef = useRef(null);
@@ -121,10 +121,12 @@ export default function Chart({ candles, analysis, own, tf, layers, marks, preci
       const dpr = window.devicePixelRatio || 1;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       const { analysis: a, own: ownS, tf: tfc, layers: ly, precision: pr } = props.current;
-      drawOverlay(ctx, {
-        W, H, x, y, tAtX: (px) => timeAtLogical(ts.coordinateToLogical(px) ?? st.n - 1),
-        analysis: a, own: ownS, tf: tfc, layers: ly || {}, precision: pr, sessionRuns: st.runs, compact: el.clientWidth < 560,
-      });
+      try {
+        drawOverlay(ctx, {
+          W, H, x, y, tAtX: (px) => timeAtLogical(ts.coordinateToLogical(px) ?? st.n - 1),
+          analysis: a, own: ownS, tf: tfc, layers: ly || {}, precision: pr, sessionRuns: st.runs, compact: el.clientWidth < 560,
+        });
+      } catch (e) { /* a bad overlay payload (e.g. data from the previous pair) must never break the chart */ }
     };
     raf = requestAnimationFrame(loop);
 
@@ -146,9 +148,20 @@ export default function Chart({ candles, analysis, own, tf, layers, marks, preci
   // ---------- candle data
   useEffect(() => {
     const { chart, series, vol, setLegend } = api.current;
-    if (!chart || !candles?.length) return;
-    const data = candles.map((c) => ({ time: c.time, open: c.open, high: c.high, low: c.low, close: c.close }));
+    if (!chart) return;
     const st = state.current;
+    // The view (pair / timeframe) changed but the data that arrived still belongs to the PREVIOUS view (or nothing has
+    // arrived yet): drop what is on screen instead of drawing old candles under the new view's key. This was the
+    // cause of the chart breaking after a few quick pair / timeframe switches.
+    if (dataKey !== undefined && dataKey !== viewKey) {
+      if (st.viewKey !== viewKey && st.n) {
+        try { series.setData([]); vol.setData([]); series.setMarkers([]); } catch { /* ignore */ }
+        st.n = 0; st.times = []; st.runs = []; st.first = undefined; st.ver++;
+      }
+      return;
+    }
+    if (!candles?.length) return;
+    const data = candles.map((c) => ({ time: c.time, open: c.open, high: c.high, low: c.low, close: c.close }));
     const prevN = st.n, fresh = st.viewKey !== viewKey;
     const vols = candles.map((c) => c.volume || 0);
     const hasVol = hasVolume && vols.some((v) => v > 0);
@@ -166,12 +179,18 @@ export default function Chart({ candles, analysis, own, tf, layers, marks, preci
     const incremental = !fresh && prevN > 0 && st.first === data[0].time && data.length >= prevN
       && data.length - prevN < 200 && Date.now() - (st.fullAt || 0) < 60000;
     const range = chart.timeScale().getVisibleLogicalRange();
+    let didIncremental = incremental;
     if (incremental) {
-      for (let i = prevN - 1; i < data.length; i++) {
-        series.update(data[i]);
-        if (hasVol) vol.update(volPoint(i));
+      try {
+        for (let i = prevN - 1; i < data.length; i++) {
+          series.update(data[i]);
+          if (hasVol) vol.update(volPoint(i));
+        }
+      } catch (e) {          // e.g. "Cannot update oldest data": fall back to a clean full reload
+        didIncremental = false;
       }
-    } else {
+    }
+    if (!didIncremental) {
       series.setData(data);
       vol.setData(hasVol ? candles.map((_, i) => volPoint(i)) : []);
       st.fullAt = Date.now();
@@ -200,12 +219,12 @@ export default function Chart({ candles, analysis, own, tf, layers, marks, preci
       const bars = Math.max(40, Math.min(200, Math.round(w / 9)));   // ~9px per candle so candles stay readable
       chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, data.length - bars), to: data.length + 8 });
       st.viewKey = viewKey;
-    } else if (!incremental) {
+    } else if (!didIncremental) {
       const atEdge = range.to >= prevN - 1;
       const shift = atEdge ? data.length - prevN : 0;
       chart.timeScale().setVisibleLogicalRange({ from: range.from + shift, to: range.to + shift });
     }
-  }, [candles, viewKey, hasVolume]);
+  }, [candles, dataKey, viewKey, hasVolume]);
 
   // ---------- markers
   useEffect(() => {

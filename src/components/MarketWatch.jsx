@@ -12,19 +12,22 @@ export function useOverview(symbol, everyMs = 90000) {
   const [err, setErr] = useState(null);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
-    let dead = false;
+    let dead = false, busy = false;
+    const ctl = new AbortController();
     setD((x) => (x?.symbol === symbol ? x : null));
     setLoading(true);
     const run = async () => {
+      if (busy) return;
+      busy = true;
       try {
-        const { data } = await api.get("/market/overview", { params: { symbol } });
+        const { data } = await api.get("/market/overview", { params: { symbol }, signal: ctl.signal });
         if (!dead) { setD(data); setErr(null); }
-      } catch (e) { if (!dead) setErr(errText(e)); }
-      finally { if (!dead) setLoading(false); }
+      } catch (e) { if (!dead && e?.code !== "ERR_CANCELED") setErr(errText(e)); }
+      finally { busy = false; if (!dead) setLoading(false); }
     };
     run();
     const t = setInterval(run, everyMs);
-    return () => { dead = true; clearInterval(t); };
+    return () => { dead = true; ctl.abort(); clearInterval(t); };
   }, [symbol, everyMs]);
   return { d, err, loading };
 }

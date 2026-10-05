@@ -1,12 +1,17 @@
+const fx = (value, a, b, note = "Forex", precision = 5) => ({ value, label: `${a}/${b}`, short: `${a}${b}`, note, precision, group: "Forex" });
 export const SYMBOLS = [
-  { value: "XAUUSD=X", label: "Gold Spot (matches MT5 XAUUSD)", short: "XAUUSD", note: "Spot gold - same instrument as MT5 (no volume on Yahoo)", precision: 2 },
-  { value: "GC=F", label: "Gold Futures (COMEX)", short: "GC=F", note: "Futures: trades ~$20-40 above spot, has volume", precision: 2 },
-  { value: "SI=F", label: "Silver Futures", short: "XAG", note: "COMEX silver", precision: 3 },
-  { value: "EURUSD=X", label: "EUR/USD", short: "EURUSD", note: "Forex", precision: 5 },
-  { value: "GBPUSD=X", label: "GBP/USD", short: "GBPUSD", note: "Forex", precision: 5 },
-  { value: "USDJPY=X", label: "USD/JPY", short: "USDJPY", note: "Forex", precision: 3 },
-  { value: "EURAUD=X", label: "EUR/AUD", short: "EURAUD", note: "Forex", precision: 5 },
+  { value: "XAUUSD=X", label: "Gold Spot (matches MT5 XAUUSD)", short: "XAUUSD", note: "Spot gold - same instrument as MT5 (no volume on Yahoo)", precision: 2, group: "Metals" },
+  { value: "GC=F", label: "Gold Futures (COMEX)", short: "GC=F", note: "Futures: trades ~$20-40 above spot, has volume", precision: 2, group: "Metals" },
+  { value: "SI=F", label: "Silver Futures", short: "XAG", note: "COMEX silver", precision: 3, group: "Metals" },
+  fx("EURUSD=X", "EUR", "USD"), fx("GBPUSD=X", "GBP", "USD"), fx("USDJPY=X", "USD", "JPY", "Forex", 3),
+  fx("AUDUSD=X", "AUD", "USD"), fx("NZDUSD=X", "NZD", "USD"), fx("USDCAD=X", "USD", "CAD"), fx("USDCHF=X", "USD", "CHF"),
+  fx("GBPNZD=X", "GBP", "NZD", "Forex cross - wide daily range, trends well in London"),
+  fx("EURAUD=X", "EUR", "AUD"), fx("EURGBP=X", "EUR", "GBP"), fx("EURNZD=X", "EUR", "NZD"), fx("EURCHF=X", "EUR", "CHF"),
+  fx("GBPAUD=X", "GBP", "AUD"), fx("GBPCAD=X", "GBP", "CAD"), fx("AUDNZD=X", "AUD", "NZD"),
+  fx("EURJPY=X", "EUR", "JPY", "Forex cross", 3), fx("GBPJPY=X", "GBP", "JPY", "Forex cross - fast, volatile", 3),
+  fx("AUDJPY=X", "AUD", "JPY", "Forex cross", 3), fx("NZDJPY=X", "NZD", "JPY", "Forex cross", 3), fx("CADJPY=X", "CAD", "JPY", "Forex cross", 3),
 ];
+export const SYMBOL_GROUPS = ["Metals", "Forex"];
 
 export const TIMEFRAMES = [
   { value: "1m", label: "1m", seconds: 60 },

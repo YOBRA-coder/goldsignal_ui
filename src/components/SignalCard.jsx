@@ -43,6 +43,7 @@ export default function SignalCard() {
             {sell && <ArrowDownRight className="text-bear" size={26} />}
             {!buy && !sell && <Minus className="text-gray-500" size={22} />}
             <Chip tone={s.grade === "A+" ? "gold" : s.grade === "A" ? "bull" : "gray"}>Grade {s.grade}</Chip>
+            {s.trade_type && (buy || sell) && <Chip tone="blue">{s.trade_type}</Chip>}
           </div>
           <p className="text-[13px] text-gray-300 leading-snug mt-1">{s.headline}</p>
         </div>
@@ -84,6 +85,21 @@ export default function SignalCard() {
             <Level k="Target" v={fmtPrice(s.take_profit, p)} c="text-bull" />
           </div>
           {s.risk != null && <div className="text-[11px] text-gray-500 mt-2 text-center">Risk {s.risk.toFixed(p)} pts per unit</div>}
+        </div>
+      )}
+
+      {(buy || sell) && s.confirmations?.length > 0 && (
+        <div className="mt-3">
+          <div className="text-[10px] uppercase text-gray-500 mb-1">Confirmations {s.confirm_count}/{s.confirm_needed} needed</div>
+          <div className="flex flex-wrap gap-1">{s.confirmations.map((c, i) => <Chip key={i} tone="bull">{c.label || c}</Chip>)}</div>
+        </div>
+      )}
+      {!buy && !sell && s.patterns_seen?.length > 0 && (
+        <p className="text-[11px] text-gray-500 mt-3">Candle seen: {s.patterns_seen.map((c) => c.label || c).join(", ")} - not enough confirmation yet.</p>
+      )}
+      {live.scalp_signal && live.scalp_signal.direction !== "WAIT" && (
+        <div className="mt-3 rounded-xl border border-blue-400/30 bg-blue-400/5 p-2.5 text-[12px] text-gray-300">
+          <b className="text-blue-400">{live.scalp_signal.trade_type}</b> - {live.scalp_signal.headline}
         </div>
       )}
 

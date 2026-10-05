@@ -199,23 +199,31 @@ function drawSessions(ctx, env) {
   });
 }
 
-function drawTrade(ctx, env, a, precision) {
-  const t = a.trade;
+function drawOneTrade(ctx, env, t, precision, idx) {
   if (!t || !t.entry) return;
   const { x, y, W } = env;
+  const sl = t.current_sl ?? t.sl;
   const x1 = Math.max(0, x(t.ts) ?? 0);
-  const ye = y(t.entry), ys = y(t.sl), yt = y(t.tp);
+  const ye = y(t.entry), ys = y(sl), yt = y(t.tp);
   if ([ye, ys, yt].some((v) => v == null)) return;
+  const buy = t.direction === "BUY";
   ctx.fillStyle = rgba(COLORS.bull, 0.1);
   ctx.fillRect(x1, Math.min(ye, yt), W - x1, Math.abs(yt - ye));
-  ctx.fillStyle = rgba(COLORS.bear, 0.1);
+  ctx.fillStyle = rgba(COLORS.bear, t.be_moved ? 0.04 : 0.1);
   ctx.fillRect(x1, Math.min(ye, ys), W - x1, Math.abs(ys - ye));
   hline(ctx, ye, x1, W, COLORS.gold, { width: 1.5 });
-  hline(ctx, ys, x1, W, COLORS.bear, { width: 1.2, dash: [5, 3] });
+  hline(ctx, ys, x1, W, t.be_moved ? COLORS.grey : COLORS.bear, { width: 1.2, dash: [5, 3] });
   hline(ctx, yt, x1, W, COLORS.bull, { width: 1.2, dash: [5, 3] });
-  label(ctx, `${t.direction} ${t.entry.toFixed(precision)}`, W - 6, ye - 7, "#111", { align: "right", size: 10, bold: true, bg: COLORS.gold });
-  label(ctx, `SL ${t.sl.toFixed(precision)}`, W - 6, ys + (t.direction === "BUY" ? 8 : -8), COLORS.bear, { align: "right", size: 10, bold: true, bg: "rgba(11,14,17,0.8)" });
-  label(ctx, `TP ${t.tp.toFixed(precision)}`, W - 6, yt + (t.direction === "BUY" ? -8 : 8), COLORS.bull, { align: "right", size: 10, bold: true, bg: "rgba(11,14,17,0.8)" });
+  const tag = idx > 0 || t.multi ? ` #${idx + 1}` : "";
+  const r = t.live_r != null ? ` ${t.live_r >= 0 ? "+" : ""}${t.live_r}R` : "";
+  label(ctx, `${t.direction}${tag} ${t.entry.toFixed(precision)}${r}`, W - 6, ye - 7, "#111", { align: "right", size: 10, bold: true, bg: COLORS.gold });
+  label(ctx, `${t.be_moved ? "SL(BE)" : "SL"} ${sl.toFixed(precision)}`, W - 6, ys + (buy ? 8 : -8), t.be_moved ? COLORS.grey : COLORS.bear, { align: "right", size: 10, bold: true, bg: "rgba(11,14,17,0.8)" });
+  label(ctx, `TP ${t.tp.toFixed(precision)}`, W - 6, yt + (buy ? -8 : 8), COLORS.bull, { align: "right", size: 10, bold: true, bg: "rgba(11,14,17,0.8)" });
+}
+
+function drawTrade(ctx, env, a, precision) {
+  const list = a.trades?.length ? a.trades : a.trade ? [a.trade] : [];
+  list.forEach((t, i) => drawOneTrade(ctx, env, { ...t, multi: list.length > 1 }, precision, i));
 }
 
 function drawTrigger(ctx, env, a, precision) {

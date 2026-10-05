@@ -8,7 +8,7 @@ export const useLive = () => useContext(LiveCtx);
 
 const DEFAULTS = {
   symbol: "XAUUSD=X", entryTF: "15m", chartTF: "15m", layout: "single", timeMode: "server",
-  minAgreement: 70, sessionsOnly: true, rr: 2, sound: true, notify: false,
+  minAgreement: 70, sessionsOnly: true, rr: 2, sound: true, notify: false, scalp: false,
 };
 const POLL_MS = 10000;
 const QUOTE_MS = 6000;
@@ -31,6 +31,7 @@ export function LiveProvider({ children }) {
   const [quote, setQuote] = useState(null);
   const [dataRev, setDataRev] = useState(0);
   const reqId = useRef(0);
+  const liveCtl = useRef(null);      // aborts the analysis request that is still running when inputs change
   const lastAlertId = useRef(null);
   const symRef = useRef(prefs.symbol);
   const prefsRef = useRef(prefs);
@@ -85,13 +86,19 @@ export function LiveProvider({ children }) {
     } catch { /* non-fatal */ }
   }, [pushToast, fetchHistory]);
 
-  const fetchLive = useCallback(async () => {
+  const fetchLive = useCallback(async (opts = {}) => {
+    // a poll that fires while the previous one is still running is skipped; a change of inputs cancels the old one
+    if (liveCtl.current && !opts.force) return;
+    if (liveCtl.current) liveCtl.current.abort();
+    const ctl = new AbortController();
+    liveCtl.current = ctl;
     const id = ++reqId.current;
     const p = prefsRef.current;
     try {
       const { data } = await api.get("/signals/live", {
         params: { symbol: p.symbol, entry_interval: p.entryTF, min_agreement: p.minAgreement,
-                  sessions_only: p.sessionsOnly, rr: p.rr },
+                  sessions_only: p.sessionsOnly, rr: p.rr, scalp: p.scalp },
+        signal: ctl.signal,
       });
       if (id !== reqId.current) return;
       setLive(data);
@@ -100,9 +107,10 @@ export function LiveProvider({ children }) {
       fetchAlerts();
       if (data.record_id || data.closed_now?.length) fetchHistory();
     } catch (e) {
-      if (id !== reqId.current) return;
+      if (id !== reqId.current || e?.code === "ERR_CANCELED" || e?.name === "CanceledError") return;
       setError(errText(e));
     } finally {
+      if (liveCtl.current === ctl) liveCtl.current = null;
       if (id === reqId.current) setLoading(false);
     }
   }, [fetchAlerts, fetchHistory]);
@@ -110,27 +118,35 @@ export function LiveProvider({ children }) {
   // reload when the inputs to the analysis change
   useEffect(() => {
     setLoading(true);
+    setError(null);
     if (symRef.current !== prefs.symbol) { setLive(null); symRef.current = prefs.symbol; }
-    fetchLive();
+    fetchLive({ force: true });
     fetchHistory();
-    const t = setInterval(fetchLive, POLL_MS);
-    return () => clearInterval(t);
+    const t = setInterval(() => fetchLive(), POLL_MS);
+    return () => {
+      clearInterval(t);
+      if (liveCtl.current) { liveCtl.current.abort(); liveCtl.current = null; }
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prefs.symbol, prefs.entryTF, prefs.minAgreement, prefs.sessionsOnly, prefs.rr]);
+  }, [prefs.symbol, prefs.entryTF, prefs.minAgreement, prefs.sessionsOnly, prefs.rr, prefs.scalp]);
 
   // live price tape (market watch + top bar) - light call, refreshed every few seconds
   useEffect(() => {
-    let dead = false;
+    let dead = false, busy = false;
+    const ctl = new AbortController();
     setQuote((q) => (q?.symbol === prefs.symbol ? q : null));
     const run = async () => {
+      if (busy) return;
+      busy = true;
       try {
-        const { data } = await api.get("/market/quote", { params: { symbol: prefs.symbol } });
+        const { data } = await api.get("/market/quote", { params: { symbol: prefs.symbol }, signal: ctl.signal });
         if (!dead) setQuote({ ...data, fetchedAt: Date.now() });
       } catch { /* the banner from the live call reports feed problems */ }
+      finally { busy = false; }
     };
     run();
     const t = setInterval(run, QUOTE_MS);
-    return () => { dead = true; clearInterval(t); };
+    return () => { dead = true; ctl.abort(); clearInterval(t); };
   }, [prefs.symbol]);
 
   // keep alerts fresh even if the live call is slow / failing
@@ -162,12 +178,13 @@ export function LiveProvider({ children }) {
     fetchAlerts();
   }, [fetchAlerts]);
 
-  const bumpData = useCallback(() => { setDataRev((r) => r + 1); fetchLive(); }, [fetchLive]);
+  const bumpData = useCallback(() => { setDataRev((r) => r + 1); fetchLive({ force: true }); }, [fetchLive]);
+  const refresh = useCallback(() => fetchLive({ force: true }), [fetchLive]);
 
   const value = useMemo(() => ({
-    prefs, setPref, live, quote, dataRev, bumpData, error, loading, lastUpdate, refresh: fetchLive,
+    prefs, setPref, live, quote, dataRev, bumpData, error, loading, lastUpdate, refresh,
     alerts, unseen, markRead, toasts, dismissToast, history, fetchHistory, enableDesktop, sendTest,
-  }), [prefs, setPref, live, quote, dataRev, bumpData, error, loading, lastUpdate, fetchLive, alerts, unseen, markRead, toasts,
+  }), [prefs, setPref, live, quote, dataRev, bumpData, error, loading, lastUpdate, refresh, alerts, unseen, markRead, toasts,
        dismissToast, history, fetchHistory, enableDesktop, sendTest]);
 
   return <LiveCtx.Provider value={value}>{children}</LiveCtx.Provider>;

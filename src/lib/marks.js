@@ -1,22 +1,29 @@
 import { COLORS } from "./constants";
 
 // Series markers: past signals (with their outcome) + the trigger candle of the current setup.
-export function buildMarks(analysis, history) {
+export function buildMarks(analysis, history, openTrades) {
   const out = [];
   (history || []).slice(0, 40).forEach((r) => {
     const ts = r.trigger_ts || Math.floor(new Date(r.created_at).getTime() / 1000);
     const buy = r.direction === "BUY";
     const color = r.status === "won" ? COLORS.bull : r.status === "lost" ? COLORS.bear
-      : r.status === "open" ? COLORS.gold : COLORS.grey;
-    const tail = r.status === "won" ? ` ✓ +${r.result_r ?? ""}R` : r.status === "lost" ? " ✗ -1R" : r.status === "open" ? " ●" : "";
+      : r.status === "breakeven" ? COLORS.grey : r.status === "open" ? COLORS.gold : COLORS.grey;
+    const tail = r.status === "won" ? ` ✓ +${r.result_r ?? ""}R` : r.status === "lost" ? " ✗ -1R" : r.status === "breakeven" ? " = 0R" : r.status === "open" ? " ●" : "";
     out.push({ time: ts, position: buy ? "belowBar" : "aboveBar", color, shape: buy ? "arrowUp" : "arrowDown",
       text: `${buy ? "BUY" : "SELL"}${tail}` });
   });
+  (openTrades || []).forEach((r) => {
+    const ts = r.trigger_ts || Math.floor(new Date(r.created_at).getTime() / 1000);
+    if (out.some((m) => m.time === ts && m.text.startsWith(r.direction))) return;
+    const buy = r.direction === "BUY";
+    out.push({ time: ts, position: buy ? "belowBar" : "aboveBar", color: COLORS.gold, shape: buy ? "arrowUp" : "arrowDown",
+      text: `${r.direction} ●` });
+  });
   const p = analysis?.entry?.pattern;
   if (p && !out.some((m) => m.time === p.ts)) {
-    const bull = p.type.startsWith("bullish");
+    const bull = String(p.type).startsWith("bullish");
     out.push({ time: p.ts, position: bull ? "belowBar" : "aboveBar", color: COLORS.cyan,
       shape: "circle", text: p.label });
   }
-  return out;
+  return out.sort((a, b) => a.time - b.time);
 }

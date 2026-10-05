@@ -1,12 +1,12 @@
 import React, { useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
-import { AlertTriangle, BarChart3, Bell, CheckCircle2, CircleUser, FlaskConical, GitCompareArrows, Info,
+import { Activity, AlertTriangle, BarChart3, Bell, CheckCircle2, CircleUser, FlaskConical, GitCompareArrows, Info,
   LayoutDashboard, LineChart, ListChecks, LogOut, RefreshCw, X, XCircle, Zap } from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
 import { LiveProvider, useLive } from "../context/LiveContext";
-import { Chip, Segmented } from "./ui";
+import { Chip, ErrorBoundary, Segmented, SymbolSelect } from "./ui";
 import LivePrice from "./LivePrice";
-import { ENTRY_TFS, SYMBOLS } from "../lib/constants";
+import { ENTRY_TFS } from "../lib/constants";
 import { cx, fmtAgo, timeModeLabel } from "../lib/format";
 
 const NAV = [
@@ -24,6 +24,7 @@ const kindStyle = {
   loss: { icon: XCircle, cls: "text-bear border-bear/40 bg-bear/10" },
   shift: { icon: GitCompareArrows, cls: "text-violet-400 border-violet-400/40 bg-violet-400/10" },
   info: { icon: Info, cls: "text-blue-400 border-blue-400/40 bg-blue-400/10" },
+  update: { icon: Activity, cls: "text-amber-400 border-amber-400/40 bg-amber-400/10" },
 };
 
 function Toasts() {
@@ -135,10 +136,8 @@ function TopBar() {
     <header className="sticky top-0 z-30 bg-bg/90 backdrop-blur border-b border-border">
       <div className="flex items-center gap-2 sm:gap-3 px-3 sm:px-5 lg:px-6 h-14">
         <div className="lg:hidden w-8 h-8 rounded-lg bg-gradient-to-br from-gold to-yellow-600 flex items-center justify-center font-black text-black">G</div>
-        <select value={prefs.symbol} onChange={(e) => setPref("symbol", e.target.value)}
-          className="bg-panel border border-border rounded-xl px-2.5 sm:px-3 h-10 text-sm font-semibold outline-none focus:border-gold max-w-[46vw]">
-          {SYMBOLS.map((s) => <option key={s.value} value={s.value}>{s.short} · {s.label}</option>)}
-        </select>
+        <SymbolSelect value={prefs.symbol} onChange={(v) => setPref("symbol", v)}
+          className="bg-panel border border-border rounded-xl px-2.5 sm:px-3 h-10 text-sm font-semibold outline-none focus:border-gold max-w-[46vw]" />
         <div className="hidden sm:block px-3 py-1 rounded-xl border border-border bg-panel"><LivePrice /></div>
         <div className="hidden sm:flex items-center gap-2 text-xs text-gray-500">
           <span className="whitespace-nowrap">Entry TF</span>
@@ -168,6 +167,7 @@ function TopBar() {
 
 function Shell() {
   const { user, logout } = useAuth();
+  const { prefs } = useLive();
   const loc = useLocation();
   return (
     <div className="min-h-screen bg-bg text-gray-100 lg:pl-60">
@@ -196,7 +196,7 @@ function Shell() {
       <TopBar />
       <main className="px-3 sm:px-5 lg:px-6 py-4 pb-28 lg:pb-8 max-w-[1700px] mx-auto space-y-4" key={loc.pathname}>
         <StatusBanners />
-        <Outlet />
+        <ErrorBoundary resetKey={`${loc.pathname}|${prefs.symbol}|${prefs.entryTF}`}><Outlet /></ErrorBoundary>
       </main>
 
       {/* mobile bottom nav */}

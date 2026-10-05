@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { FlaskConical, Play } from "lucide-react";
 import api from "../api";
-import { Card, Chip, Empty, Segmented, Spinner, Stat, Toggle } from "../components/ui";
+import { Card, Chip, Empty, Segmented, Spinner, Stat, SymbolSelect, Toggle } from "../components/ui";
 import { useLive } from "../context/LiveContext";
-import { ENTRY_TFS, SYMBOLS, symbolInfo } from "../lib/constants";
+import { ENTRY_TFS, symbolInfo } from "../lib/constants";
 import { cx, errText, fmtDateTime, fmtPrice } from "../lib/format";
 
 const BUCKET = { ny: "New York", overlap: "London/NY overlap", london: "London", asia: "Asia", BUY: "Buy trades", SELL: "Sell trades" };
@@ -29,11 +29,11 @@ function Equity({ curve }) {
 function Result({ r }) {
   const s = r.stats || {};
   const p = symbolInfo(r.symbol).precision;
-  const closed = r.trades.filter((t) => t.result === "win" || t.result === "loss");
+  const closed = r.trades.filter((t) => t.result === "win" || t.result === "loss" || t.result === "breakeven");
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-3">
-        <Stat label="Trades" value={r.total_trades} sub={`${r.wins}W / ${r.losses}L`} />
+        <Stat label="Trades" value={r.total_trades} sub={`${r.wins}W / ${r.losses}L${s.breakevens ? ` / ${s.breakevens} BE` : ""}`} />
         <Stat label="Win rate" value={`${r.win_rate}%`} tone={r.win_rate >= 40 ? "bull" : "amber"} sub={`break-even at ${(100 / (1 + (r.params?.rr || 2))).toFixed(0)}%`} />
         <Stat label="Min agreement used" value={`${r.min_agreement_effective ?? r.stats?.params?.min_agreement}%`} sub={r.min_agreement_effective !== r.stats?.params?.min_agreement ? `adjusted from ${r.stats?.params?.min_agreement}% for 1:${r.stats?.params?.risk_reward}` : "as requested"} />
         <Stat label="Net R" value={`${r.net_r > 0 ? "+" : ""}${r.net_r}R`} tone={r.net_r >= 0 ? "bull" : "bear"} />
@@ -98,7 +98,7 @@ function Result({ r }) {
 
 export default function Backtest() {
   const { prefs } = useLive();
-  const [f, setF] = useState({ symbol: prefs.symbol, entry_interval: prefs.entryTF, risk_reward: prefs.rr, min_agreement: prefs.minAgreement, sessions_only: prefs.sessionsOnly });
+  const [f, setF] = useState({ symbol: prefs.symbol, entry_interval: prefs.entryTF, risk_reward: prefs.rr, min_agreement: prefs.minAgreement, sessions_only: prefs.sessionsOnly, style: "swing" });
   const [res, setRes] = useState(null);
   const [runs, setRuns] = useState([]);
   const [busy, setBusy] = useState(false);
@@ -123,9 +123,7 @@ export default function Backtest() {
       <Card title="Backtest the strategy" icon={FlaskConical}>
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4 items-end">
           <label className="block text-xs text-gray-500">Symbol
-            <select value={f.symbol} onChange={(e) => setF({ ...f, symbol: e.target.value })} className="mt-1 w-full h-10 bg-panel2 border border-border rounded-lg px-2 text-sm text-gray-100">
-              {SYMBOLS.map((s) => <option key={s.value} value={s.value}>{s.short} · {s.label}</option>)}
-            </select>
+            <SymbolSelect value={f.symbol} onChange={(v) => setF({ ...f, symbol: v })} className="mt-1 w-full h-10 bg-panel2 border border-border rounded-lg px-2 text-sm text-gray-100" />
           </label>
           <div className="text-xs text-gray-500">Entry timeframe
             <Segmented className="mt-1" options={ENTRY_TFS} value={f.entry_interval} onChange={(v) => setF({ ...f, entry_interval: v })} />
@@ -140,6 +138,7 @@ export default function Backtest() {
             {busy ? <Spinner className="!border-black/30 !border-t-black" /> : <Play size={16} />} {busy ? "Running…" : "Run backtest"}
           </button>
         </div>
+        <div className="max-w-sm mt-1"><Toggle on={f.style === "scalp"} onChange={(v) => setF({ ...f, style: v ? "scalp" : "swing" })} label="Scalp mode (1H-led, short-term)" hint="Off = swing: 4H and 1H must agree" /></div>
         <div className="max-w-sm mt-1"><Toggle on={f.sessions_only} onChange={(v) => setF({ ...f, sessions_only: v })} label="London / New York only" /></div>
         <p className="text-xs text-gray-500">Uses the last ~59 days of {f.entry_interval} candles (the most Yahoo provides for intraday data). Takes a few seconds.</p>
         {err && <div className="text-sm text-bear mt-2 break-words">{err}</div>}

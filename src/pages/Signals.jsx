@@ -8,7 +8,7 @@ import { cx, errText, fmtDateTime, fmtPrice } from "../lib/format";
 import { symbolInfo } from "../lib/constants";
 
 const FILTERS = [{ value: "all", label: "All" }, { value: "open", label: "Open" }, { value: "won", label: "Won" },
-  { value: "lost", label: "Lost" }, { value: "expired", label: "Expired" }];
+  { value: "lost", label: "Lost" }, { value: "breakeven", label: "Breakeven" }, { value: "expired", label: "Expired" }];
 
 function Detail({ id }) {
   const [rows, setRows] = useState(null);
@@ -47,7 +47,7 @@ export default function Signals() {
 
   const badge = (r) => (
     <Chip tone={r.status === "won" ? "bull" : r.status === "lost" ? "bear" : r.status === "open" ? "gold" : "gray"}>
-      {r.status === "won" ? `WON +${r.result_r}R` : r.status === "lost" ? "LOST -1R" : r.status.toUpperCase()}
+      {r.status === "won" ? `WON +${r.result_r}R` : r.status === "lost" ? "LOST -1R" : r.status === "breakeven" ? "BREAKEVEN 0R" : r.status.toUpperCase()}
     </Chip>
   );
 
@@ -55,7 +55,7 @@ export default function Signals() {
     <div className="space-y-4">
       {stats && (
         <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-3">
-          <Stat label="Win rate" value={`${stats.win_rate}%`} tone={stats.win_rate >= 40 ? "bull" : "amber"} sub={`${stats.won}W / ${stats.lost}L`} />
+          <Stat label="Win rate" value={`${stats.win_rate}%`} tone={stats.win_rate >= 40 ? "bull" : "amber"} sub={`${stats.won}W / ${stats.lost}L / ${stats.breakeven || 0}BE`} />
           <Stat label="Net R" value={`${stats.net_r > 0 ? "+" : ""}${stats.net_r}R`} tone={stats.net_r >= 0 ? "bull" : "bear"} />
           <Stat label="Open" value={stats.open_signals} tone="gold" />
           <Stat label="Total" value={stats.total_signals} />
@@ -77,6 +77,8 @@ export default function Signals() {
                       <div className="min-w-0 flex-1">
                         <div className="text-sm font-medium flex flex-wrap items-center gap-x-2">
                           {r.symbol} <span className="text-gray-500 font-normal">{r.entry_interval || ""}</span>
+                          {r.trade_type && <span className="text-[11px] text-blue-400">{r.trade_type}</span>}
+                          {r.status === "open" && r.health && <span className="text-[11px] text-amber-400 capitalize">{r.health.replace("_", " ")}</span>}
                           {r.agreement != null && <span className="text-xs text-gold">{Math.round(r.agreement)}% · {r.grade}</span>}
                         </div>
                         <div className="text-[11px] text-gray-500">{fmtDateTime(r.created_at)}{r.session_label ? ` · ${r.session_label}` : ""}</div>
@@ -97,11 +99,12 @@ export default function Signals() {
                   </button>
                   {open === r.id && (
                     <div className="mt-2 pl-1">
+                      {r.health_note && r.status === "open" && <p className="text-xs text-gray-400 mb-1">{r.health_note}</p>}
                       <Detail id={r.id} />
                       {r.status === "open" && (
                         <div className="flex flex-wrap gap-2 mt-2">
                           <span className="text-xs text-gray-500 self-center">Auto-tracked. Manual override:</span>
-                          {["won", "lost", "cancelled"].map((x) => (
+                          {["won", "lost", "breakeven", "cancelled"].map((x) => (
                             <button key={x} disabled={busy === r.id} onClick={() => close(r.id, x)}
                               className="text-xs px-3 py-1.5 rounded-lg border border-border hover:border-gold/50 capitalize">{x === "cancelled" ? "Cancel" : `Mark ${x}`}</button>
                           ))}

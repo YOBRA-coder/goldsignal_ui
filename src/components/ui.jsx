@@ -1,5 +1,6 @@
 import React from "react";
 import { cx } from "../lib/format";
+import { SYMBOLS, SYMBOL_GROUPS } from "../lib/constants";
 
 export function Card({ title, right, children, className = "", pad = true, icon: Icon }) {
   return (
@@ -104,4 +105,37 @@ export function Ring({ value, size = 76, tone = "gold", label = "agree" }) {
       </div>
     </div>
   );
+}
+
+/** Pair picker grouped by market (Metals / Forex) so a long list stays easy to scan. */
+export function SymbolSelect({ value, onChange, className = "" }) {
+  return (
+    <select value={value} onChange={(e) => onChange(e.target.value)} className={className}>
+      {SYMBOL_GROUPS.map((g) => (
+        <optgroup key={g} label={g}>
+          {SYMBOLS.filter((s) => s.group === g).map((s) => <option key={s.value} value={s.value}>{s.short} · {s.label}</option>)}
+        </optgroup>
+      ))}
+    </select>
+  );
+}
+
+/** Catches a render error in one part of the page so a bad payload shows a retry card, not a blank screen. */
+export class ErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { err: null, key: props.resetKey }; }
+  static getDerivedStateFromError(err) { return { err }; }
+  static getDerivedStateFromProps(props, state) {
+    return props.resetKey !== state.key ? { err: null, key: props.resetKey } : null;   // new pair / page -> try again
+  }
+  componentDidCatch(err) { console.error("GoldSignal UI error:", err); }
+  render() {
+    if (!this.state.err) return this.props.children;
+    return (
+      <div className="bg-panel border border-bear/30 rounded-2xl p-5 text-sm">
+        <div className="font-semibold text-bear mb-1">This panel hit an error</div>
+        <div className="text-gray-400 mb-3 break-words">{String(this.state.err?.message || this.state.err)}</div>
+        <button onClick={() => this.setState({ err: null })} className="px-3 py-1.5 rounded-lg border border-border hover:border-gold/50 text-gray-200">Try again</button>
+      </div>
+    );
+  }
 }
