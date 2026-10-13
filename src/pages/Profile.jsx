@@ -139,7 +139,12 @@ export default function Profile() {
             <input type="range" min="1" max="5" step="0.5" value={prefs.rr} onChange={(e) => setPref("rr", +e.target.value)} className="w-full mt-2" />
             <span className="block text-xs text-gray-500">Signal frequency scales with this automatically: a smaller target (1:1) needs less room to work, so the required agreement is relaxed and setups fire more often; a bigger target (1:4-5) needs a much cleaner setup, so the bar goes up and signals get rarer. The exact % used is shown on the signal card.</span>
           </label>
-          <div className="mt-3"><Toggle on={!!prefs.scalp} onChange={(v) => setPref("scalp", v)} label="Also look for scalps" hint="Adds short-term 1H-led trades (nearer target) next to the normal 4H-aligned swing signals. Stricter confirmation, opt-in." /></div>
+          <div className="mt-4 text-sm text-gray-300">Entry sensitivity
+            <Segmented className="mt-2 w-fit" options={[{ value: "strict", label: "Strict" }, { value: "normal", label: "Normal" }, { value: "high", label: "High" }]} value={prefs.sens || "normal"} onChange={(v) => setPref("sens", v)} />
+            <span className="block text-xs text-gray-500 mt-1">Strict = the original rules (engulfing / pin bar only). Normal = every trigger candle and confirmation the engine knows, zone touches count for longer. High = also uses the entry timeframe's own order blocks / gaps and accepts slightly lower agreement. More signals, so check the Backtest page before trusting it.</span>
+          </div>
+          <div className="mt-3"><Toggle on={prefs.showReplay !== false} onChange={(v) => setPref("showReplay", v)} label="Show past signals & near-misses on the chart" hint="Replays the engine over the stored candles so scrolling back shows what it would have said and how each trade went." /></div>
+          <div className="mt-3"><Toggle on={!!prefs.scalp} onChange={(v) => setPref("scalp", v)} label="Also look for scalps" hint="Adds short-term trades led by the 1H (nearer 1.5R target) next to the swing signals. With the 4H it needs the normal backing; against the 4H it needs one extra confirmation." /></div>
           <div className="mt-3"><Toggle on={prefs.sessionsOnly} onChange={(v) => setPref("sessionsOnly", v)} label="London / New York sessions only" hint="Blocks signals outside those sessions (recommended)" /></div>
           <div className="mt-3 text-xs text-gray-500 bg-panel2 rounded-lg p-2.5">
             <b className="text-violet-400">Early warning:</b> you'll also get a separate "Bias shift" alert the instant 4H structure flips, or 1H moves in or out of agreement with 4H — well before all 4 steps line up into a full BUY/SELL. It's a heads-up to pay attention, not a trade signal.

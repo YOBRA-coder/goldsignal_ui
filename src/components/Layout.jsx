@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { Activity, AlertTriangle, BarChart3, Bell, CheckCircle2, CircleUser, FlaskConical, GitCompareArrows, Info,
-  LayoutDashboard, LineChart, ListChecks, LogOut, RefreshCw, X, XCircle, Zap } from "lucide-react";
+  LayoutDashboard, LineChart, ListChecks, LogOut, RefreshCw, X, XCircle, Zap, Crosshair } from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
 import { LiveProvider, useLive } from "../context/LiveContext";
 import { Chip, ErrorBoundary, Segmented, SymbolSelect } from "./ui";
@@ -24,6 +24,7 @@ const kindStyle = {
   loss: { icon: XCircle, cls: "text-bear border-bear/40 bg-bear/10" },
   shift: { icon: GitCompareArrows, cls: "text-violet-400 border-violet-400/40 bg-violet-400/10" },
   info: { icon: Info, cls: "text-blue-400 border-blue-400/40 bg-blue-400/10" },
+  setup: { icon: Crosshair, cls: "text-cyan-400 border-cyan-400/40 bg-cyan-400/10" },
   update: { icon: Activity, cls: "text-amber-400 border-amber-400/40 bg-amber-400/10" },
 };
 

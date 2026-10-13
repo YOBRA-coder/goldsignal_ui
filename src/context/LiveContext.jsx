@@ -8,7 +8,7 @@ export const useLive = () => useContext(LiveCtx);
 
 const DEFAULTS = {
   symbol: "XAUUSD=X", entryTF: "15m", chartTF: "15m", layout: "single", timeMode: "server",
-  minAgreement: 70, sessionsOnly: true, rr: 2, sound: true, notify: false, scalp: false,
+  minAgreement: 70, sessionsOnly: true, rr: 2, sound: true, notify: false, scalp: false, sens: "normal", showReplay: true,
 };
 const POLL_MS = 10000;
 const QUOTE_MS = 6000;
@@ -97,7 +97,7 @@ export function LiveProvider({ children }) {
     try {
       const { data } = await api.get("/signals/live", {
         params: { symbol: p.symbol, entry_interval: p.entryTF, min_agreement: p.minAgreement,
-                  sessions_only: p.sessionsOnly, rr: p.rr, scalp: p.scalp },
+                  sessions_only: p.sessionsOnly, rr: p.rr, scalp: p.scalp, sens: p.sens },
         signal: ctl.signal,
       });
       if (id !== reqId.current) return;
@@ -128,7 +128,7 @@ export function LiveProvider({ children }) {
       if (liveCtl.current) { liveCtl.current.abort(); liveCtl.current = null; }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prefs.symbol, prefs.entryTF, prefs.minAgreement, prefs.sessionsOnly, prefs.rr, prefs.scalp]);
+  }, [prefs.symbol, prefs.entryTF, prefs.minAgreement, prefs.sessionsOnly, prefs.rr, prefs.scalp, prefs.sens]);
 
   // live price tape (market watch + top bar) - light call, refreshed every few seconds
   useEffect(() => {

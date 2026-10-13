@@ -88,8 +88,9 @@ function Result({ r }) {
         </div>
       </Card>
       <p className="text-xs text-gray-500">
-        Walk-forward on {r.stats?.bars ?? "?"} candles ({fmtDateTime(r.stats?.from_ts)} → {fmtDateTime(r.stats?.to_ts)}). Higher-timeframe context ({r.stats?.htf_source || "1H/4H"}) is used only after each bar closes, entries are at the trigger candle's close,
-        and a candle touching both SL and TP counts as a loss. Spread, slippage and commission are <b>not</b> modelled; key daily/weekly levels are not used in the backtest.
+        Walk-forward on {r.stats?.bars ?? "?"} candles ({fmtDateTime(r.stats?.from_ts)} → {fmtDateTime(r.stats?.to_ts)}, {s.days ?? "?"} days, {s.trades_per_day ?? "?"} trades/day). Higher-timeframe context ({r.stats?.htf_source || "1H/4H"}) is used only after each bar closes.
+        Same engine, daily/weekly levels and trade rules as the live scanner. Fills: {s.fill === "close" ? "at the signal candle's close, no costs" : `next candle's open, spread ${s.spread ?? 0} per trade (${s.total_cost_r ?? 0}R total cost)`}.
+        A candle touching both SL and TP counts as a loss. {s.skipped ? `Skipped: ${s.skipped.missed_fill} missed fills, ${s.skipped.overlap} overlapping setups.` : ""} Commission is not modelled.
         Past results do not guarantee future performance.
       </p>
     </div>
@@ -98,7 +99,7 @@ function Result({ r }) {
 
 export default function Backtest() {
   const { prefs } = useLive();
-  const [f, setF] = useState({ symbol: prefs.symbol, entry_interval: prefs.entryTF, risk_reward: prefs.rr, min_agreement: prefs.minAgreement, sessions_only: prefs.sessionsOnly, style: "swing" });
+  const [f, setF] = useState({ symbol: prefs.symbol, entry_interval: prefs.entryTF, risk_reward: prefs.rr, min_agreement: prefs.minAgreement, sessions_only: prefs.sessionsOnly, style: prefs.scalp ? "scalp" : "swing", sens: prefs.sens || "normal", realistic_fill: true, period: "59d" });
   const [res, setRes] = useState(null);
   const [runs, setRuns] = useState([]);
   const [busy, setBusy] = useState(false);
@@ -112,7 +113,7 @@ export default function Backtest() {
   async function run() {
     setBusy(true); setErr(null);
     try {
-      const { data } = await api.post("/backtest/run", { ...f, period: "59d" });
+      const { data } = await api.post("/backtest/run", f);
       setRes(withParams(data));
       setRuns((x) => [data, ...x]);
     } catch (e) { setErr(errText(e)); } finally { setBusy(false); }
@@ -139,8 +140,17 @@ export default function Backtest() {
           </button>
         </div>
         <div className="max-w-sm mt-1"><Toggle on={f.style === "scalp"} onChange={(v) => setF({ ...f, style: v ? "scalp" : "swing" })} label="Scalp mode (1H-led, short-term)" hint="Off = swing: 4H and 1H must agree" /></div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
+          <div className="text-xs text-gray-500">Entry sensitivity
+            <Segmented className="mt-1" options={[{ value: "strict", label: "Strict" }, { value: "normal", label: "Normal" }, { value: "high", label: "High" }]} value={f.sens} onChange={(v) => setF({ ...f, sens: v })} />
+          </div>
+          <div className="text-xs text-gray-500">History to test
+            <Segmented className="mt-1" options={[{ value: "30d", label: "30d" }, { value: "59d", label: "59d" }, { value: "120d", label: "120d" }, { value: "250d", label: "250d" }]} value={f.period} onChange={(v) => setF({ ...f, period: v })} />
+          </div>
+        </div>
+        <div className="max-w-sm mt-2"><Toggle on={f.realistic_fill} onChange={(v) => setF({ ...f, realistic_fill: v })} label="Realistic fills + spread" hint="Enter on the NEXT candle's open and pay the spread (about 1 basis point of price). Off = enter at the signal candle's close, no costs." /></div>
         <div className="max-w-sm mt-1"><Toggle on={f.sessions_only} onChange={(v) => setF({ ...f, sessions_only: v })} label="London / New York only" /></div>
-        <p className="text-xs text-gray-500">Uses the last ~59 days of {f.entry_interval} candles (the most Yahoo provides for intraday data). Takes a few seconds.</p>
+        <p className="text-xs text-gray-500">Yahoo only serves ~59 days of {f.entry_interval} candles at a time; anything longer comes from the candles this app has stored while running (it keeps growing). If the stored history is shorter than you asked for, the test uses what exists.</p>
         {err && <div className="text-sm text-bear mt-2 break-words">{err}</div>}
       </Card>
 

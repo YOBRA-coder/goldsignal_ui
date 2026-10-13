@@ -14,16 +14,17 @@ const LAYER_DEFS = [
   { key: "trigger", label: "Trigger", hint: "Entry candle, mini BOS, entry/SL/TP" },
   { key: "levels", label: "Levels", hint: "PDH/PDL/PWH/PWL, opens, sessions, round numbers" },
   { key: "sessions", label: "Sessions", hint: "London / New York / Asia bands" },
+  { key: "history", label: "Past signals", hint: "Signals the engine would have given on the candles you scroll back to, how each went, and near-misses (amber)" },
 ];
-export const DEFAULT_LAYERS = { own: true, htf: true, setup: true, trigger: true, levels: true, sessions: true };
+export const DEFAULT_LAYERS = { own: true, htf: true, setup: true, trigger: true, levels: true, sessions: true, history: true };
 
 /** Sensible overlays per timeframe so candles stay readable (you can still toggle anything). */
 export function presetFor(tf) {
-  const off = { own: false, htf: false, setup: false, trigger: false, levels: false, sessions: false };
+  const off = { own: false, htf: false, setup: false, trigger: false, levels: false, sessions: false, history: false };
   if (["1d", "1w"].includes(tf)) return { ...off, own: true, levels: true };
   if (tf === "4h") return { ...off, own: true, levels: true, trigger: true };
   if (tf === "1h") return { ...off, own: true, htf: true, levels: true, trigger: true, sessions: true };
-  return { ...off, own: true, setup: true, trigger: true, levels: true, sessions: true };   // 1m-30m
+  return { ...off, own: true, setup: true, trigger: true, levels: true, sessions: true, history: true };   // 1m-30m
 }
 
 function LayerChips({ layers, setLayers, tf }) {
@@ -157,17 +158,17 @@ export default function ChartPanel({ tall = false }) {
           <div className="bg-panel border border-border rounded-2xl overflow-hidden">
             <PanelTitle step="1-2" title="4H direction + map" bias={a?.["4h"]?.bias}
               right={<div className="flex items-center gap-2"><Chip tone="gray">4H</Chip><ExpandBtn onClick={() => setExpanded({ tf: "4h", layers: presetFor("4h") })} /></div>} />
-            <LiveChart tf="4h" layers={L4} heightClass={h} limit={300} />
+            <LiveChart tf="4h" layers={L4} heightClass={h} limit={500} />
           </div>
           <div className="bg-panel border border-border rounded-2xl overflow-hidden">
             <PanelTitle step="3" title="1H structure + liquidity" bias={a?.["1h"]?.bias}
               right={<div className="flex items-center gap-2"><Chip tone="gray">1H</Chip><ExpandBtn onClick={() => setExpanded({ tf: "1h", layers: presetFor("1h") })} /></div>} />
-            <LiveChart tf="1h" layers={L1} heightClass={h} limit={400} />
+            <LiveChart tf="1h" layers={L1} heightClass={h} limit={1000} />
           </div>
           <div className="bg-panel border border-border rounded-2xl overflow-hidden lg:col-span-2">
             <PanelTitle step="4" title={`${prefs.entryTF} entry trigger`}
               right={<div className="flex items-center gap-2"><span className="text-[11px] text-gray-500 hidden sm:inline">{sess?.label}</span><ExpandBtn onClick={() => setExpanded({ tf: prefs.entryTF, layers: presetFor(prefs.entryTF) })} /></div>} />
-            <LiveChart tf={prefs.entryTF} layers={LE} heightClass={tall ? "h-[340px] md:h-[440px]" : "h-[300px] md:h-[380px]"} limit={400} />
+            <LiveChart tf={prefs.entryTF} layers={LE} heightClass={tall ? "h-[340px] md:h-[440px]" : "h-[300px] md:h-[380px]"} limit={1000} />
           </div>
         </div>
       </div>
@@ -188,7 +189,7 @@ export default function ChartPanel({ tall = false }) {
         <Legend c="#12b886" t="Demand / bull OB" /><Legend c="#ff4d4f" t="Supply / bear OB" />
         <Legend c="#3b82f6" t="Bull FVG" /><Legend c="#f59e0b" t="Bear FVG · CHoCH · PDH/PDL" />
         <Legend c="#a78bfa" t="Liquidity (EQH/EQL/BSL/SSL)" /><Legend c="#c084fc" t="Trend line" />
-        <Legend c="#22d3ee" t="Mini BOS" /><Legend c="#d4af37" t="Zone hit / entry" />
+        <Legend c="#22d3ee" t="Mini BOS · zone touch" /><Legend c="#f59e0b" t="Near-miss (rule blocked it)" /><Legend c="#d4af37" t="Zone hit / entry" />
         <SessionKey />
       </div>
     </div>

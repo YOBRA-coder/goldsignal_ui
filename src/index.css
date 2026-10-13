@@ -1,6 +1,15 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+@theme {
+  --color-bg: #0b0e11;
+  --color-panel: #12161c;
+  --color-panel2: #181d25;
+  --color-border: #232a35;
+  --color-bull: #12b886;
+  --color-bear: #ff4d4f;
+  --color-gold: #d4af37;
+  --color-accent: #3b82f6;
+}
 
 html { -webkit-text-size-adjust: 100%; }
 body {
@@ -20,3 +29,4 @@ body {
 input, select, button { font: inherit; }
 select option { background: #12161c; }
 input[type="range"] { accent-color: #d4af37; }
+

@@ -18,7 +18,7 @@ const fmtCross = (t) => fmtTime(t, { day: "2-digit", month: "short" });
  *  layers   : {htf, setup, trigger, levels, sessions}
  */
 export default function Chart({ candles, dataKey, analysis, own, tf, layers, marks, precision = 2, barSeconds = 900,
-  viewKey, hasVolume = true, heightClass = "h-[340px] md:h-[460px] xl:h-[540px]" }) {
+  viewKey, hasVolume = true, onNeedOlder, heightClass = "h-[340px] md:h-[460px] xl:h-[540px]" }) {
   const wrapRef = useRef(null);
   const elRef = useRef(null);
   const canvasRef = useRef(null);
@@ -26,7 +26,7 @@ export default function Chart({ candles, dataKey, analysis, own, tf, layers, mar
   const api = useRef({});          // chart, series, volume
   const state = useRef({ times: [], runs: [], n: 0, ver: 0, sig: "" });
   const props = useRef({});
-  props.current = { analysis, own, tf, layers, precision, barSeconds };
+  props.current = { analysis, own, tf, layers, precision, barSeconds, onNeedOlder };
 
   // ---------- create chart once
   useEffect(() => {
@@ -80,6 +80,11 @@ export default function Chart({ candles, dataKey, analysis, own, tf, layers, mar
       sizeCanvas();
     });
     ro.observe(el);
+
+    // ---------- scroll-back: ask for older candles when the left edge gets close
+    chart.timeScale().subscribeVisibleLogicalRangeChange((r) => {
+      if (r && r.from < 40) props.current.onNeedOlder?.();
+    });
 
     // ---------- overlay helpers (time/price -> pixels)
     const ts = chart.timeScale();
@@ -179,6 +184,13 @@ export default function Chart({ candles, dataKey, analysis, own, tf, layers, mar
     const incremental = !fresh && prevN > 0 && st.first === data[0].time && data.length >= prevN
       && data.length - prevN < 200 && Date.now() - (st.fullAt || 0) < 60000;
     const range = chart.timeScale().getVisibleLogicalRange();
+    // older candles were added at the left: keep the user's view where it was (shift by the number of new bars)
+    let prepended = 0;
+    if (!fresh && prevN > 0 && st.first !== undefined && st.first !== data[0].time) {
+      let lo = 0, hi = data.length - 1;
+      while (lo < hi) { const m = (lo + hi) >> 1; if (data[m].time < st.first) lo = m + 1; else hi = m; }
+      if (data[lo].time === st.first) prepended = lo;
+    }
     let didIncremental = incremental;
     if (incremental) {
       try {
@@ -221,7 +233,7 @@ export default function Chart({ candles, dataKey, analysis, own, tf, layers, mar
       st.viewKey = viewKey;
     } else if (!didIncremental) {
       const atEdge = range.to >= prevN - 1;
-      const shift = atEdge ? data.length - prevN : 0;
+      const shift = prepended > 0 ? prepended : (atEdge ? data.length - prevN : 0);
       chart.timeScale().setVisibleLogicalRange({ from: range.from + shift, to: range.to + shift });
     }
   }, [candles, dataKey, viewKey, hasVolume]);

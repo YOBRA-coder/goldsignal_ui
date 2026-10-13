@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import api from "../api";
 import Chart from "./Chart";
 import { Spinner } from "./ui";
@@ -10,7 +10,7 @@ import { symbolInfo, tfSeconds } from "../lib/constants";
 // server merges the live 1m tape into every timeframe, so polling fast is cheap (cached server-side)
 const pollMs = (tf) => (tf === "1m" ? 6000 : tf === "5m" || tf === "15m" ? 8000 : tf === "30m" || tf === "1h" ? 10000 : 20000);
 
-export function useCandles(symbol, tf, limit = 500, rev = 0) {
+export function useCandles(symbol, tf, limit = 1000, rev = 0) {
   const [s, setS] = useState({ candles: [], data: null, hasVolume: true, loading: true, error: null, key: "", structure: null });
   useEffect(() => {
     const key = `${symbol}|${tf}`;
@@ -39,12 +39,67 @@ export function useCandles(symbol, tf, limit = 500, rev = 0) {
   return s;
 }
 
+const ENTRY_SET = ["1m", "5m", "15m", "30m"];
+
+/** Older pages of candles (scroll-back). The live poll only carries the newest `limit` bars; everything the user
+ *  scrolls back to is fetched page by page from the stored history and kept until the view (pair / timeframe) changes. */
+function useOlder(symbol, tf, rev, firstTime) {
+  const [st, setSt] = useState({ key: "", bars: [], more: true, busy: false });
+  const key = `${symbol}|${tf}|${rev}`;
+  const ref = useRef(st);
+  ref.current = st;
+  useEffect(() => { setSt({ key, bars: [], more: true, busy: false }); }, [key]);
+  const load = useCallback(async () => {
+    const cur = ref.current;
+    if (cur.key !== key || cur.busy || !cur.more || !firstTime) return;
+    const oldest = cur.bars.length ? cur.bars[0].time : firstTime;
+    setSt((x) => ({ ...x, busy: true }));
+    try {
+      const { data } = await api.get("/market/candles", { params: { symbol, interval: tf, limit: 1000, before: oldest, structure: false } });
+      setSt((x) => (x.key !== key ? x : { ...x, bars: [...data.candles, ...x.bars], more: !!data.has_more && data.candles.length > 0, busy: false }));
+    } catch { setSt((x) => ({ ...x, busy: false })); }
+  }, [key, symbol, tf, firstTime]);
+  return { older: st.key === key ? st.bars : [], more: st.more, loadOlder: load };
+}
+
+/** Past signals + near-misses: the engine replayed over the candles on screen (see /signals/replay). */
+function useReplay(symbol, tf, prefs, spanDays, enabled) {
+  const [r, setR] = useState({ key: "", data: null });
+  const days = Math.min(365, Math.max(14, Math.ceil(spanDays / 7) * 7));
+  const key = `${symbol}|${tf}|${prefs.sens}|${prefs.scalp}|${prefs.minAgreement}|${prefs.rr}|${prefs.sessionsOnly}|${days}`;
+  useEffect(() => {
+    if (!enabled) return undefined;
+    let dead = false;
+    const run = async () => {
+      try {
+        const { data } = await api.get("/signals/replay", { params: {
+          symbol, entry_interval: tf, style: prefs.scalp ? "both" : "swing", sens: prefs.sens || "normal",
+          min_agreement: prefs.minAgreement, sessions_only: prefs.sessionsOnly, rr: prefs.rr, days } });
+        if (!dead) setR({ key, data });
+      } catch { /* the chart works without it */ }
+    };
+    run();
+    const t = setInterval(run, 90000);
+    return () => { dead = true; clearInterval(t); };
+  }, [key, enabled]);   // eslint-disable-line react-hooks/exhaustive-deps
+  return enabled && r.key === key ? r.data : (enabled ? r.data : null);
+}
+
 /** One chart bound to live data + the shared analysis overlay. */
-export default function LiveChart({ tf, layers, heightClass, limit = 500 }) {
+export default function LiveChart({ tf, layers, heightClass, limit = 1000 }) {
   const { prefs, live, history, dataRev } = useLive();
-  const { candles, hasVolume, loading, error, structure, key: loadedKey } = useCandles(prefs.symbol, tf, limit, dataRev);
+  const { candles: recent, hasVolume, loading, error, structure, key: loadedKey } = useCandles(prefs.symbol, tf, limit, dataRev);
+  const { older, more, loadOlder } = useOlder(prefs.symbol, tf, dataRev, recent[0]?.time);
+  const candles = useMemo(() => {
+    if (!older.length) return recent;
+    const first = recent[0]?.time ?? Infinity;
+    return [...older.filter((c) => c.time < first), ...recent];
+  }, [older, recent]);
+  const spanDays = candles.length ? (Date.now() / 1000 - candles[0].time) / 86400 : 14;
+  const wantReplay = ENTRY_SET.includes(tf) && prefs.showReplay !== false && layers?.history !== false;
+  const replay = useReplay(prefs.symbol, tf, prefs, spanDays, wantReplay);
   const here = useMemo(() => (live?.open_trades || []).filter((t) => t.symbol === prefs.symbol), [live, prefs.symbol]);
-  const marks = useMemo(() => buildMarks(live?.analysis, history, here), [live, history, here]);
+  const marks = useMemo(() => buildMarks(live?.analysis, history, here, wantReplay ? replay : null), [live, history, here, replay, wantReplay]);
   // every running trade of this pair is drawn (entry / stop / target), not just the first one
   const analysis = useMemo(() => {
     if (!live?.analysis) return live?.analysis;
@@ -59,7 +114,8 @@ export default function LiveChart({ tf, layers, heightClass, limit = 500 }) {
   return (
     <div className="relative h-full">
       <Chart candles={candles} dataKey={dataKey} analysis={analysis} own={structure} tf={tf} layers={layers} marks={marks} precision={info.precision}
-        barSeconds={tfSeconds(tf)} viewKey={viewKey} hasVolume={hasVolume} heightClass={heightClass} />
+        barSeconds={tfSeconds(tf)} viewKey={viewKey} hasVolume={hasVolume} heightClass={heightClass}
+        onNeedOlder={more ? loadOlder : undefined} />
       {loading && !candles.length && (
         <div className="absolute inset-0 flex items-center justify-center gap-2 text-sm text-gray-500"><Spinner /> Loading {tf} candles…</div>
       )}
