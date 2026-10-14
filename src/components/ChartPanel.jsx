@@ -15,17 +15,18 @@ const LAYER_DEFS = [
   { key: "trigger", label: "Trigger", hint: "Entry candle, mini BOS, entry/SL/TP" },
   { key: "levels", label: "Levels", hint: "PDH/PDL/PWH/PWL, opens, sessions, round numbers" },
   { key: "sessions", label: "Sessions", hint: "London / New York / Asia bands" },
+  { key: "news", label: "News", hint: "CPI / NFP / FOMC and other releases: line + blackout band + how far price moved afterwards. Signals pause inside the band." },
   { key: "history", label: "Past signals", hint: "Signals the engine would have given on the candles you scroll back to, how each went, and near-misses (amber)" },
 ];
-export const DEFAULT_LAYERS = { own: true, htf: true, setup: true, trigger: true, levels: true, sessions: true, history: true };
+export const DEFAULT_LAYERS = { own: true, htf: true, setup: true, trigger: true, levels: true, sessions: true, news: true, history: true };
 
 /** Sensible overlays per timeframe so candles stay readable (you can still toggle anything). */
 export function presetFor(tf) {
-  const off = { own: false, htf: false, setup: false, trigger: false, levels: false, sessions: false, history: false };
+  const off = { own: false, htf: false, setup: false, trigger: false, levels: false, sessions: false, news: false, history: false };
   if (["1d", "1w"].includes(tf)) return { ...off, own: true, levels: true };
-  if (tf === "4h") return { ...off, own: true, levels: true, trigger: true };
-  if (tf === "1h") return { ...off, own: true, htf: true, levels: true, trigger: true, sessions: true };
-  return { ...off, own: true, setup: true, trigger: true, levels: true, sessions: true, history: true };   // 1m-30m
+  if (tf === "4h") return { ...off, own: true, levels: true, trigger: true, news: true };
+  if (tf === "1h") return { ...off, own: true, htf: true, levels: true, trigger: true, sessions: true, news: true };
+  return { ...off, own: true, setup: true, trigger: true, levels: true, sessions: true, news: true, history: true };   // 1m-30m
 }
 
 function LayerChips({ layers, setLayers, tf }) {
@@ -155,9 +156,9 @@ export default function ChartPanel({ tall = false }) {
 
   if (prefs.layout === "topdown") {
     const h = tall ? "h-[300px] md:h-[360px]" : "h-[260px] md:h-[300px]";
-    const L4 = { own: true, levels: true, sessions: false };
-    const L1 = { own: true, sessions: layers.sessions };
-    const LE = { own: true, setup: true, trigger: true, sessions: layers.sessions };
+    const L4 = { own: true, levels: true, sessions: false, news: true };
+    const L1 = { own: true, sessions: layers.sessions, news: true };
+    const LE = { own: true, setup: true, trigger: true, sessions: layers.sessions, news: true };
     return (
       <div className="space-y-3">
         {expanded && <Expanded tf={expanded.tf} layers={expanded.layers} onClose={close} />}
@@ -204,7 +205,7 @@ export default function ChartPanel({ tall = false }) {
         <Legend c="#12b886" t="Demand / bull OB" /><Legend c="#ff4d4f" t="Supply / bear OB" />
         <Legend c="#3b82f6" t="Bull FVG" /><Legend c="#f59e0b" t="Bear FVG · CHoCH · PDH/PDL" />
         <Legend c="#a78bfa" t="Liquidity (EQH/EQL/BSL/SSL)" /><Legend c="#c084fc" t="Trend line" />
-        <Legend c="#22d3ee" t="Mini BOS · zone touch" /><Legend c="#f59e0b" t="Near-miss (rule blocked it)" /><Legend c="#d4af37" t="Zone hit / entry" />
+        <Legend c="#ff4d4f" t="News release / blackout band" /><Legend c="#22d3ee" t="Mini BOS · zone touch" /><Legend c="#f59e0b" t="Near-miss (rule blocked it)" /><Legend c="#d4af37" t="Zone hit / entry" />
         <SessionKey />
       </div>
     </div>

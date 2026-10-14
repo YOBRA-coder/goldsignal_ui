@@ -26,6 +26,38 @@ function Equity({ curve }) {
   );
 }
 
+function Why({ d }) {
+  if (!d || !d.losers && d.losers !== 0) return null;
+  const rows = [["Agreement", d.by_agreement], ["Pattern", d.by_pattern], ["Zone", d.by_zone], ["Grade", d.by_grade]];
+  return (
+    <Card title="Why trades lose — and where">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <Stat label="Average win" value={`+${d.avg_win_r}R`} tone="bull" />
+        <Stat label="Average loss" value={`${d.avg_loss_r}R`} tone="bear" sub="stop + spread" />
+        <Stat label="Win rate needed" value={d.breakeven_win_rate != null ? `${d.breakeven_win_rate}%` : "—"} sub="to break even at these averages" />
+        <Stat label="Losers once in profit" value={`${d.losers_reached_half_r}/${d.losers}`} sub={`reached +0.5R first · ${d.losers_reached_1r} reached +1R`} tone={d.losers && d.losers_reached_half_r / d.losers > 0.4 ? "amber" : undefined} />
+      </div>
+      {(d.hints || []).map((h, i) => <p key={i} className="text-xs text-amber-300 mt-2">• {h}</p>)}
+      {(d.weak_spots || []).length > 0 && (
+        <div className="mt-3 text-xs">
+          <div className="text-[11px] uppercase text-gray-500 mb-1">Buckets that lose money (8+ trades)</div>
+          {d.weak_spots.map((w, i) => <div key={i} className="text-gray-300">{w.group} <b>{String(w.key).replace(/_/g, " ")}</b>: {w.trades} trades, {w.win_rate}% won, <span className="text-bear">{w.net_r}R</span></div>)}
+        </div>
+      )}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 mt-3">
+        {rows.map(([name, b]) => b && Object.keys(b).length > 0 && (
+          <table key={name} className="w-full text-xs mb-2">
+            <thead><tr className="text-[10px] uppercase text-gray-500 text-left"><th className="py-1">{name}</th><th>Trades</th><th>Win %</th><th className="text-right">Net R</th></tr></thead>
+            <tbody>{Object.entries(b).map(([k, v]) => (
+              <tr key={k} className="border-t border-border/60"><td className="py-1">{String(k).replace(/_/g, " ")}</td><td>{v.trades}</td><td>{v.win_rate}%</td>
+                <td className={cx("text-right tabular-nums", v.net_r >= 0 ? "text-bull" : "text-bear")}>{v.net_r}</td></tr>))}</tbody>
+          </table>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
 function Result({ r }) {
   const s = r.stats || {};
   const p = symbolInfo(r.symbol).precision;
@@ -55,6 +87,7 @@ function Result({ r }) {
           </table>
         </Card>
       </div>
+      <Why d={s.diagnostics} />
       <Card title={`Trades (${closed.length})`} pad={false}>
         <div className="max-h-[520px] overflow-auto">
           <table className="w-full text-sm hidden md:table">
@@ -90,7 +123,8 @@ function Result({ r }) {
       <p className="text-xs text-gray-500">
         Walk-forward on {r.stats?.bars ?? "?"} candles ({fmtDateTime(r.stats?.from_ts)} → {fmtDateTime(r.stats?.to_ts)}, {s.days ?? "?"} days, {s.trades_per_day ?? "?"} trades/day). Higher-timeframe context ({r.stats?.htf_source || "1H/4H"}) is used only after each bar closes.
         Same engine, daily/weekly levels and trade rules as the live scanner. Fills: {s.fill === "close" ? "at the signal candle's close, no costs" : `next candle's open, spread ${s.spread ?? 0} per trade (${s.total_cost_r ?? 0}R total cost)`}.
-        A candle touching both SL and TP counts as a loss. {s.skipped ? `Skipped: ${s.skipped.missed_fill} missed fills, ${s.skipped.overlap} overlapping setups.` : ""} Commission is not modelled.
+        A candle touching both SL and TP counts as a loss. {s.skipped ? `Skipped: ${s.skipped.missed_fill} missed fills, ${s.skipped.overlap} overlapping setups, ${s.skipped.cooldown ?? 0} re-entries right after a stop-out.` : ""} News blackout: {s.news_level || "off"} ({s.news_windows ?? 0} windows; the calendar only knows releases the app has seen or can schedule - NFP, FOMC, claims - so older CPI days are not blocked).
+         Commission is not modelled.
         Past results do not guarantee future performance.
       </p>
     </div>
@@ -99,7 +133,7 @@ function Result({ r }) {
 
 export default function Backtest() {
   const { prefs } = useLive();
-  const [f, setF] = useState({ symbol: prefs.symbol, entry_interval: prefs.entryTF, risk_reward: prefs.rr, min_agreement: prefs.minAgreement, sessions_only: prefs.sessionsOnly, style: prefs.scalp ? "scalp" : "swing", sens: prefs.sens || "normal", realistic_fill: true, period: "59d" });
+  const [f, setF] = useState({ symbol: prefs.symbol, entry_interval: prefs.entryTF, risk_reward: prefs.rr, min_agreement: prefs.minAgreement, sessions_only: prefs.sessionsOnly, style: prefs.scalp ? "scalp" : "swing", sens: prefs.sens || "normal", realistic_fill: true, period: "59d", news: "app" });
   const [res, setRes] = useState(null);
   const [runs, setRuns] = useState([]);
   const [busy, setBusy] = useState(false);
@@ -113,7 +147,7 @@ export default function Backtest() {
   async function run() {
     setBusy(true); setErr(null);
     try {
-      const { data } = await api.post("/backtest/run", f);
+      const { data } = await api.post("/backtest/run", { ...f, news: f.news === "app" ? null : f.news });
       setRes(withParams(data));
       setRuns((x) => [data, ...x]);
     } catch (e) { setErr(errText(e)); } finally { setBusy(false); }
@@ -147,6 +181,9 @@ export default function Backtest() {
           <div className="text-xs text-gray-500">History to test
             <Segmented className="mt-1" options={[{ value: "30d", label: "30d" }, { value: "59d", label: "59d" }, { value: "120d", label: "120d" }, { value: "250d", label: "250d" }]} value={f.period} onChange={(v) => setF({ ...f, period: v })} />
           </div>
+        </div>
+        <div className="text-xs text-gray-500 mt-3">News blackout (CPI / NFP / FOMC …)
+          <Segmented className="mt-1" options={[{ value: "app", label: "App setting" }, { value: "off", label: "Off" }, { value: "high", label: "High" }, { value: "all", label: "High+med" }]} value={f.news} onChange={(v) => setF({ ...f, news: v })} />
         </div>
         <div className="max-w-sm mt-2"><Toggle on={f.realistic_fill} onChange={(v) => setF({ ...f, realistic_fill: v })} label="Realistic fills + spread" hint="Enter on the NEXT candle's open and pay the spread (about 1 basis point of price). Off = enter at the signal candle's close, no costs." /></div>
         <div className="max-w-sm mt-1"><Toggle on={f.sessions_only} onChange={(v) => setF({ ...f, sessions_only: v })} label="London / New York only" /></div>

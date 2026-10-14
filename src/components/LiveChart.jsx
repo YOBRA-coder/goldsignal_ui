@@ -85,6 +85,28 @@ function useReplay(symbol, tf, prefs, spanDays, enabled) {
   return enabled && r.key === key ? r.data : (enabled ? r.data : null);
 }
 
+/** Economic-news events for the span on screen (see /news/calendar): lines + blackout bands + "how far it moved". */
+function useNews(symbol, tf, spanDays, enabled) {
+  const [r, setR] = useState({ key: "", events: [], win: null });
+  const days = Math.min(365, Math.max(3, Math.ceil(spanDays) + 1));
+  const impact = ["4h", "1d", "1w"].includes(tf) ? "high" : "medium";
+  const key = `${symbol}|${days}|${impact}`;
+  useEffect(() => {
+    if (!enabled) return undefined;
+    let dead = false;
+    const run = async () => {
+      try {
+        const { data } = await api.get("/news/calendar", { params: { symbol, days_back: days, days_ahead: 7, impact, reactions: true } });
+        if (!dead) setR({ key, events: data.events || [], win: data.settings && data.settings.filter !== "off" ? data.settings : null });
+      } catch { /* the chart works without it */ }
+    };
+    run();
+    const t = setInterval(run, 120000);
+    return () => { dead = true; clearInterval(t); };
+  }, [key, enabled]);   // eslint-disable-line react-hooks/exhaustive-deps
+  return r;
+}
+
 /** One chart bound to live data + the shared analysis overlay. */
 export default function LiveChart({ tf, layers, heightClass, limit = 1000 }) {
   const { prefs, live, history, dataRev } = useLive();
@@ -98,6 +120,8 @@ export default function LiveChart({ tf, layers, heightClass, limit = 1000 }) {
   const spanDays = candles.length ? (Date.now() / 1000 - candles[0].time) / 86400 : 14;
   const wantReplay = ENTRY_SET.includes(tf) && prefs.showReplay !== false && layers?.history !== false;
   const replay = useReplay(prefs.symbol, tf, prefs, spanDays, wantReplay);
+  const wantNews = layers?.news !== false && !!layers?.news;
+  const newsData = useNews(prefs.symbol, tf, spanDays, wantNews);
   const here = useMemo(() => (live?.open_trades || []).filter((t) => t.symbol === prefs.symbol), [live, prefs.symbol]);
   const marks = useMemo(() => buildMarks(live?.analysis, history, here, wantReplay ? replay : null), [live, history, here, replay, wantReplay]);
   // every running trade of this pair is drawn (entry / stop / target), not just the first one
@@ -115,7 +139,8 @@ export default function LiveChart({ tf, layers, heightClass, limit = 1000 }) {
     <div className="relative h-full">
       <Chart candles={candles} dataKey={dataKey} analysis={analysis} own={structure} tf={tf} layers={layers} marks={marks} precision={info.precision}
         barSeconds={tfSeconds(tf)} viewKey={viewKey} hasVolume={hasVolume} heightClass={heightClass}
-        onNeedOlder={more ? loadOlder : undefined} chartType={prefs.chartType || "candles"} />
+        onNeedOlder={more ? loadOlder : undefined} chartType={prefs.chartType || "candles"}
+        news={wantNews ? newsData.events : null} newsWin={newsData.win} />
       {loading && !candles.length && (
         <div className="absolute inset-0 flex items-center justify-center gap-2 text-sm text-gray-500"><Spinner /> Loading {tf} candles…</div>
       )}

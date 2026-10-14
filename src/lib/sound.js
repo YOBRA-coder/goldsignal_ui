@@ -29,6 +29,7 @@ export function playAlert(kind) {
     if (kind === "win") { tone(660, 0, 0.14); tone(880, 0.14, 0.14); tone(1320, 0.28, 0.3); }
     else if (kind === "loss") { tone(330, 0, 0.22, "triangle"); tone(220, 0.22, 0.4, "triangle"); }
     else if (kind === "setup") { tone(587, 0, 0.1, "triangle"); tone(784, 0.14, 0.18, "triangle"); }
+    else if (kind === "news") { tone(440, 0, 0.18, "square", 0.07); tone(440, 0.26, 0.18, "square", 0.07); tone(330, 0.52, 0.3, "square", 0.07); }
     else if (kind === "update") { tone(740, 0, 0.1, "triangle"); tone(988, 0.14, 0.14, "triangle"); }
     else { tone(880, 0, 0.12); tone(880, 0.2, 0.12); tone(1175, 0.4, 0.25); }
   } catch { /* ignore */ }

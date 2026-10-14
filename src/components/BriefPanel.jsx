@@ -8,7 +8,7 @@ import { symbolInfo } from "../lib/constants";
 import { cx, fmtDateTime, fmtTime } from "../lib/format";
 
 const TONE = { signal: "gold", waiting_trigger: "blue", waiting_zone: "gray", not_aligned: "gray", no_bias: "gray", out_of_session: "gray",
-  risk_too_wide: "amber", low_agreement: "amber", stretched: "amber", needs_confirmation: "amber", blocked: "amber", market_closed: "gray" };
+  risk_too_wide: "amber", low_agreement: "amber", stretched: "amber", needs_confirmation: "amber", blocked: "amber", no_room: "amber", news: "bear", choppy: "amber", market_closed: "gray" };
 const ENTRY = ["1m", "5m", "15m", "30m"];
 const PREV = ["forming", "h1_preview", "one_h_preview", "entry_shift_preview", "counter_watch"];
 
@@ -72,6 +72,12 @@ export default function BriefPanel({ tf, onClose }) {
           <div className="mt-1.5 text-gray-400"><span className="text-gold">Scalp:</span> {sc.direction !== "WAIT" ? `${sc.direction} ` : ""}{sc.headline}</div>
         )}
         {b.data?.note && <div className="text-amber-400/90 mt-1.5">{b.data.note}</div>}
+
+        {s.news && (s.news.blackout || s.news.next) && (
+          <div className={cx("mt-1.5", s.news.blackout ? "text-bear" : "text-amber-300")}>
+            {s.news.blackout ? `News blackout: ${s.news.blackout.label} until ${fmtTime(s.news.blackout.end)}` : `News: ${s.news.next.label} — signals pause ${fmtDateTime(s.news.next.start)}`}
+          </div>
+        )}
 
         <div className="text-[10px] uppercase tracking-wide text-gray-500 mt-3 mb-1">What is expected</div>
         {o && (

@@ -18,7 +18,7 @@ const fmtCross = (t) => fmtTime(t, { day: "2-digit", month: "short" });
  *  layers   : {htf, setup, trigger, levels, sessions}
  */
 export default function Chart({ candles, dataKey, analysis, own, tf, layers, marks, precision = 2, barSeconds = 900,
-  viewKey, hasVolume = true, onNeedOlder, chartType = "candles", heightClass = "h-[340px] md:h-[460px] xl:h-[540px]" }) {
+  viewKey, hasVolume = true, onNeedOlder, chartType = "candles", news, newsWin, heightClass = "h-[340px] md:h-[460px] xl:h-[540px]" }) {
   const wrapRef = useRef(null);
   const elRef = useRef(null);
   const canvasRef = useRef(null);
@@ -26,7 +26,7 @@ export default function Chart({ candles, dataKey, analysis, own, tf, layers, mar
   const api = useRef({});          // chart, series, volume
   const state = useRef({ times: [], runs: [], n: 0, ver: 0, sig: "" });
   const props = useRef({});
-  props.current = { analysis, own, tf, layers, precision, barSeconds, onNeedOlder, chartType };
+  props.current = { analysis, own, tf, layers, precision, barSeconds, onNeedOlder, chartType, news, newsWin };
 
   // ---------- create chart once
   useEffect(() => {
@@ -129,11 +129,11 @@ export default function Chart({ candles, dataKey, analysis, own, tf, layers, mar
       const ctx = cv.getContext("2d");
       const dpr = window.devicePixelRatio || 1;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      const { analysis: a, own: ownS, tf: tfc, layers: ly, precision: pr } = props.current;
+      const { analysis: a, own: ownS, tf: tfc, layers: ly, precision: pr, news: nws, newsWin: nwin } = props.current;
       try {
         drawOverlay(ctx, {
           W, H, x, y, tAtX: (px) => timeAtLogical(ts.coordinateToLogical(px) ?? st.n - 1),
-          analysis: a, own: ownS, tf: tfc, layers: ly || {}, precision: pr, sessionRuns: st.runs, compact: el.clientWidth < 560,
+          analysis: a, own: ownS, tf: tfc, layers: ly || {}, precision: pr, news: nws, newsWin: nwin, sessionRuns: st.runs, compact: el.clientWidth < 560,
         });
       } catch (e) { /* a bad overlay payload (e.g. data from the previous pair) must never break the chart */ }
     };
@@ -274,7 +274,7 @@ export default function Chart({ candles, dataKey, analysis, own, tf, layers, mar
     [series, line, area].forEach((x) => x.setMarkers(x === on ? list : []));
   }, [marks, candles, chartType]);
 
-  useEffect(() => { state.current.ver++; }, [analysis, own, layers]);
+  useEffect(() => { state.current.ver++; }, [analysis, own, layers, news, newsWin]);
 
   return (
     <div ref={wrapRef} className={`relative w-full ${heightClass}`}>

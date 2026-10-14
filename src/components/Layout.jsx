@@ -1,18 +1,19 @@
 import React, { useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
-import { Activity, AlertTriangle, BarChart3, Bell, CheckCircle2, CircleUser, FlaskConical, GitCompareArrows, Info,
+import { Newspaper, Activity, AlertTriangle, BarChart3, Bell, CheckCircle2, CircleUser, FlaskConical, GitCompareArrows, Info,
   LayoutDashboard, LineChart, ListChecks, LogOut, RefreshCw, X, XCircle, Zap, Crosshair } from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
 import { LiveProvider, useLive } from "../context/LiveContext";
 import { Chip, ErrorBoundary, Segmented, SymbolSelect } from "./ui";
 import LivePrice from "./LivePrice";
 import { ENTRY_TFS } from "../lib/constants";
-import { cx, fmtAgo, timeModeLabel } from "../lib/format";
+import { cx, fmtAgo, fmtCountdown, fmtTime, timeModeLabel } from "../lib/format";
 
 const NAV = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
   { to: "/charts", label: "Charts", icon: LineChart },
   { to: "/market", label: "Market", icon: BarChart3 },
+  { to: "/news", label: "News", icon: Newspaper },
   { to: "/signals", label: "Signals", icon: ListChecks },
   { to: "/backtest", label: "Backtest", icon: FlaskConical },
   { to: "/profile", label: "Profile", icon: CircleUser },
@@ -25,6 +26,7 @@ const kindStyle = {
   shift: { icon: GitCompareArrows, cls: "text-violet-400 border-violet-400/40 bg-violet-400/10" },
   info: { icon: Info, cls: "text-blue-400 border-blue-400/40 bg-blue-400/10" },
   setup: { icon: Crosshair, cls: "text-cyan-400 border-cyan-400/40 bg-cyan-400/10" },
+  news: { icon: Newspaper, cls: "text-red-400 border-red-400/40 bg-red-400/10" },
   update: { icon: Activity, cls: "text-amber-400 border-amber-400/40 bg-amber-400/10" },
 };
 
@@ -95,6 +97,26 @@ function AlertBell() {
   );
 }
 
+function NewsBanner() {
+  const { live } = useLive();
+  const n = live?.signal?.news;
+  if (!n || n.filter === "off") return null;
+  const now = Math.floor(Date.now() / 1000);
+  const w = n.blackout || (n.next && n.next.start - now <= 3600 ? n.next : null);
+  if (!w) return null;
+  const on = !!n.blackout;
+  return (
+    <div className={cx("flex items-start gap-2 text-xs rounded-xl border px-3 py-2", on ? "bg-bear/10 border-bear/40 text-bear" : "bg-amber-400/10 border-amber-400/30 text-amber-300")}>
+      <Newspaper size={15} className="mt-0.5 shrink-0" />
+      <div className="min-w-0 flex-1">
+        <b>{on ? "News blackout — signals paused:" : "High-impact news soon:"}</b> {w.label}.{" "}
+        {on ? `Trading resumes around ${fmtTime(w.end)}.` : `Signals pause at ${fmtTime(w.start)} (in ${fmtCountdown(w.start)}) until ${fmtTime(w.end)}.`}
+        {" "}Open trades: consider tightening or flattening before the release.
+      </div>
+    </div>
+  );
+}
+
 function StatusBanners() {
   const { error, live, lastUpdate, refresh } = useLive();
   const d = live?.data;
@@ -115,6 +137,7 @@ function StatusBanners() {
           <button onClick={refresh} className="text-xs underline shrink-0">Retry</button>
         </div>
       )}
+      <NewsBanner />
       {d?.demo && (
         <div className="text-xs bg-amber-400/10 border border-amber-400/30 text-amber-300 rounded-xl px-3 py-2">
           <b>DEMO DATA</b> — synthetic prices for testing (GOLDSIGNAL_DEMO=1). Do not trade off these signals.
@@ -201,7 +224,7 @@ function Shell() {
       </main>
 
       {/* mobile bottom nav */}
-      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-panel/95 backdrop-blur border-t border-border grid grid-cols-6 pb-[env(safe-area-inset-bottom)]">
+      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-panel/95 backdrop-blur border-t border-border grid grid-cols-7 pb-[env(safe-area-inset-bottom)]">
         {NAV.map(({ to, label, icon: Icon, end }) => (
           <NavLink key={to} to={to} end={end}
             className={({ isActive }) => cx("flex flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-medium", isActive ? "text-gold" : "text-gray-500")}>

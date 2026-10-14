@@ -1,7 +1,7 @@
 import { COLORS } from "./constants";
 
 // Series markers: past signals (with their outcome) + the trigger candle of the current setup.
-const BLOCK = { session: "session", confluence: "weak trigger", extension: "stretched", risk: "wide stop", agreement: "agreement", rule: "rule" };
+const BLOCK = { session: "session", confluence: "weak trigger", extension: "stretched", risk: "wide stop", agreement: "agreement", rule: "rule", room: "no room", news: "news", chop: "chop", cost: "spread" };
 
 // Past signals + near-misses from the replay endpoint (the engine run over the stored candles).
 function replayMarks(replay, out) {

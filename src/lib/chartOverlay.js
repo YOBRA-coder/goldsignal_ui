@@ -249,6 +249,44 @@ function drawTrigger(ctx, env, a, precision) {
   }
 }
 
+// Economic-news events: a vertical line at the release, a shaded blackout band around high-impact ones, a flag with the
+// name, and (for releases that already happened) how far price travelled afterwards.
+const SHORT = [[/non-?farm|nfp|employment change/i, "NFP"], [/core cpi/i, "Core CPI"], [/\bcpi\b|consumer price/i, "CPI"], [/fomc.*(press|conference)/i, "FOMC presser"],
+  [/fomc|federal funds|rate decision|interest rate/i, "RATE"], [/core pce|pce/i, "PCE"], [/unemployment claims/i, "Claims"], [/unemployment rate/i, "Unemp"],
+  [/gdp/i, "GDP"], [/retail sales/i, "Retail"], [/\bpmi\b|ism/i, "PMI"], [/powell|speaks|speech/i, "Speech"], [/\bppi\b/i, "PPI"]];
+const shortName = (t) => { for (const [re, s] of SHORT) if (re.test(t)) return s; return t.length > 16 ? `${t.slice(0, 15)}…` : t; };
+
+function drawNews(ctx, env) {
+  const { x, W, H, news, newsWin } = env;
+  if (!news?.length) return;
+  const rows = [14, 30, 46];
+  let last = [-1e9, -1e9, -1e9];
+  news.forEach((e) => {
+    if (!e.relevant) return;
+    const px = x(e.ts);
+    if (px == null || px < -40 || px > W + 40) return;
+    const col = e.impact === "high" ? COLORS.bear : COLORS.amber;
+    if (e.impact === "high" && newsWin) {
+      const a = x(e.ts - newsWin.before * 60), b = x(e.ts + newsWin.after * 60);
+      if (a != null && b != null) { ctx.fillStyle = rgba(COLORS.bear, 0.06); ctx.fillRect(a, 0, Math.max(2, b - a), H); }
+    }
+    ctx.save();
+    ctx.strokeStyle = rgba(col, e.impact === "high" ? 0.85 : 0.55);
+    ctx.lineWidth = e.impact === "high" ? 1.5 : 1;
+    ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(px, 0); ctx.lineTo(px, H); ctx.stroke();
+    ctx.restore();
+    const r = e.reaction;
+    const text = `${e.impact === "high" ? "●" : "○"} ${e.currency} ${shortName(e.title)}` + (r && r.atr_x ? ` ${r.dir === "up" ? "▲" : "▼"}${r.atr_x}×` : "");
+    ctx.font = "600 10px ui-monospace, SFMono-Regular, Menlo, monospace";
+    const w = ctx.measureText(text).width + 8;
+    let row = 0;
+    while (row < rows.length - 1 && px < last[row] + 4) row++;
+    last[row] = px + w;
+    label(ctx, text, px + 4, rows[row], r ? (r.dir === "up" ? COLORS.bull : COLORS.bear) : col, { bg: "rgba(11,14,20,0.82)", bold: true });
+  });
+}
+
 export function drawOverlay(ctx, env) {
   const { W, H, layers, analysis: a, precision, tf } = env;
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
@@ -257,6 +295,7 @@ export function drawOverlay(ctx, env) {
   ctx.rect(0, 0, W, H);
   ctx.clip();
   if (layers.sessions) drawSessions(ctx, env);
+  if (layers.news) drawNews(ctx, env);
   if (a) {
     if (layers.levels) drawLevels(ctx, env, a.levels || [], precision);
     // Structure of the timeframe being viewed (BOS/CHoCH, swings, OB/FVG, liquidity, trend lines).

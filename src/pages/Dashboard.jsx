@@ -9,6 +9,7 @@ import Outlook from "../components/Outlook";
 import Checklist from "../components/Checklist";
 import SessionsPanel from "../components/SessionsPanel";
 import MarketWatch from "../components/MarketWatch";
+import NewsPanel from "../components/NewsPanel";
 import { Card, Chip, Empty } from "../components/ui";
 import { useLive } from "../context/LiveContext";
 import { fmtAgo, fmtPrice } from "../lib/format";
@@ -50,6 +51,7 @@ export default function Dashboard() {
           <BuildingPanel />
           <OpenTrades />
           <Outlook />
+          <NewsPanel compact />
         </div>
         <div className="order-2 xl:order-none xl:col-span-8 xl:col-start-1 xl:row-start-1 xl:row-span-2 min-w-0">
           <ChartPanel />

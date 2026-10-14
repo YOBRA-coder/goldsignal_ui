@@ -8,6 +8,7 @@ import Dashboard from "./pages/Dashboard.jsx";
 import Signals from "./pages/Signals.jsx";
 import Charts from "./pages/Charts.jsx";
 import Market from "./pages/Market.jsx";
+import News from "./pages/News";
 import Backtest from "./pages/Backtest.jsx";
 import Profile from "./pages/Profile.jsx";
 
@@ -33,6 +34,7 @@ export default function App() {
         <Route index element={<Dashboard />} />
         <Route path="charts" element={<Charts />} />
         <Route path="market" element={<Market />} />
+        <Route path="news" element={<News />} />
         <Route path="signals" element={<Signals />} />
         <Route path="history" element={<Navigate to="/signals" replace />} />
         <Route path="backtest" element={<Backtest />} />

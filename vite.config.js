@@ -1,11 +1,11 @@
 import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react' 
+import react from '@vitejs/plugin-react'
 
 let lastWarn = 0
 
 export default defineConfig({
-   plugins: [react()], 
-  server: {
+    plugins: [react()],
+    server: {
     port: 5173,
     proxy: {
       '/api': {
