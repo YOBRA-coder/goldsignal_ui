@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { Expand, Layers, LayoutGrid, Maximize, Minimize, Square, X } from "lucide-react";
+import { Expand, Layers, LayoutGrid, Maximize, Minimize, ScrollText, Square, X } from "lucide-react";
+import BriefPanel from "./BriefPanel";
 import LiveChart from "./LiveChart";
 import LivePrice from "./LivePrice";
 import { Chip, Segmented } from "./ui";
@@ -62,6 +63,12 @@ function PanelTitle({ step, title, bias, right }) {
   );
 }
 
+const CHART_TYPES = [{ value: "candles", label: "Candles" }, { value: "line", label: "Line" }, { value: "area", label: "Area" }];
+function ChartTypeSwitch() {
+  const { prefs, setPref } = useLive();
+  return <Segmented size="sm" value={prefs.chartType || "candles"} onChange={(v) => setPref("chartType", v)} options={CHART_TYPES} />;
+}
+
 function ExpandBtn({ onClick }) {
   return (
     <button onClick={onClick} title="Expand chart (full screen)" aria-label="Expand chart"
@@ -78,6 +85,7 @@ function Expanded({ tf: tf0, layers: l0, onClose }) {
   const [layers, setLayers] = useState(l0);
   const setTf = (t) => { setTfRaw(t); setLayers(presetFor(t)); };
   const [fs, setFs] = useState(false);
+  const [logOpen, setLogOpen] = useState(false);
   const info = symbolInfo(prefs.symbol);
 
   useEffect(() => {
@@ -107,6 +115,12 @@ function Expanded({ tf: tf0, layers: l0, onClose }) {
         <Segmented size="sm" value={tf} onChange={setTf} options={TIMEFRAMES} />
         <div className="hidden md:block"><LayerChips layers={layers} setLayers={setLayers} tf={tf} /></div>
         <div className="ml-auto flex items-center gap-2">
+          <ChartTypeSwitch />
+          <button onClick={() => setLogOpen((v) => !v)} title="Log: what is happening and what is expected" aria-pressed={logOpen}
+            className={cx("h-9 px-3 rounded-lg border flex items-center gap-1.5 text-xs font-medium",
+              logOpen ? "border-gold/60 bg-gold/10 text-gold" : "border-border bg-panel text-gray-300 hover:text-gold")}>
+            <ScrollText size={15} /> Log
+          </button>
           {document.documentElement.requestFullscreen && (
             <button onClick={toggleBrowserFs} title="Browser full screen" className="hidden sm:flex w-9 h-9 rounded-lg border border-border bg-panel items-center justify-center text-gray-400 hover:text-gold">
               {fs ? <Minimize size={16} /> : <Maximize size={16} />}
@@ -116,7 +130,8 @@ function Expanded({ tf: tf0, layers: l0, onClose }) {
         </div>
         <div className="md:hidden w-full"><LayerChips layers={layers} setLayers={setLayers} tf={tf} /></div>
       </div>
-      <div className="flex-1 min-h-0">
+      <div className="flex-1 min-h-0 relative">
+        {logOpen && <BriefPanel tf={tf} onClose={() => setLogOpen(false)} />}
         <LiveChart tf={tf} layers={layers} heightClass="h-full" limit={800} />
       </div>
     </div>
@@ -180,7 +195,7 @@ export default function ChartPanel({ tall = false }) {
       {expanded && <Expanded tf={expanded.tf} layers={expanded.layers} onClose={close} />}
       <div className="flex flex-wrap items-center justify-between gap-2 px-3 pt-3">
         <Segmented size="sm" value={prefs.chartTF} onChange={changeTf} options={TIMEFRAMES} className="max-w-full" />
-        <div className="flex items-center gap-2">{modeSwitch}<ExpandBtn onClick={() => setExpanded({ tf: prefs.chartTF, layers: { ...layers } })} /></div>
+        <div className="flex items-center gap-2"><ChartTypeSwitch />{modeSwitch}<ExpandBtn onClick={() => setExpanded({ tf: prefs.chartTF, layers: { ...layers } })} /></div>
       </div>
       <div className="px-3 pt-2.5"><LayerChips layers={layers} setLayers={setLayers} tf={prefs.chartTF} /></div>
       <LiveChart tf={prefs.chartTF} layers={layers}

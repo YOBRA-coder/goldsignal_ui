@@ -8,7 +8,7 @@ export const useLive = () => useContext(LiveCtx);
 
 const DEFAULTS = {
   symbol: "XAUUSD=X", entryTF: "15m", chartTF: "15m", layout: "single", timeMode: "server",
-  minAgreement: 70, sessionsOnly: true, rr: 2, sound: true, notify: false, scalp: false, sens: "normal", showReplay: true,
+  minAgreement: 70, sessionsOnly: true, rr: 2, sound: true, notify: false, scalp: false, sens: "normal", showReplay: true, chartType: "candles",
 };
 const POLL_MS = 10000;
 const QUOTE_MS = 6000;

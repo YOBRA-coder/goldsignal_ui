@@ -18,7 +18,7 @@ const fmtCross = (t) => fmtTime(t, { day: "2-digit", month: "short" });
  *  layers   : {htf, setup, trigger, levels, sessions}
  */
 export default function Chart({ candles, dataKey, analysis, own, tf, layers, marks, precision = 2, barSeconds = 900,
-  viewKey, hasVolume = true, onNeedOlder, heightClass = "h-[340px] md:h-[460px] xl:h-[540px]" }) {
+  viewKey, hasVolume = true, onNeedOlder, chartType = "candles", heightClass = "h-[340px] md:h-[460px] xl:h-[540px]" }) {
   const wrapRef = useRef(null);
   const elRef = useRef(null);
   const canvasRef = useRef(null);
@@ -26,7 +26,7 @@ export default function Chart({ candles, dataKey, analysis, own, tf, layers, mar
   const api = useRef({});          // chart, series, volume
   const state = useRef({ times: [], runs: [], n: 0, ver: 0, sig: "" });
   const props = useRef({});
-  props.current = { analysis, own, tf, layers, precision, barSeconds, onNeedOlder };
+  props.current = { analysis, own, tf, layers, precision, barSeconds, onNeedOlder, chartType };
 
   // ---------- create chart once
   useEffect(() => {
@@ -45,9 +45,13 @@ export default function Chart({ candles, dataKey, analysis, own, tf, layers, mar
       upColor: "#12b886", downColor: "#ff4d4f", borderVisible: true, borderUpColor: "#12b886", borderDownColor: "#ff4d4f",
       wickUpColor: "#12b886", wickDownColor: "#ff4d4f",
     });
+    const line = chart.addLineSeries({ color: "#d4af37", lineWidth: 2, visible: false, priceLineVisible: true, lastValueVisible: true,
+      crosshairMarkerVisible: true });
+    const area = chart.addAreaSeries({ lineColor: "#d4af37", topColor: "rgba(212,175,55,0.30)", bottomColor: "rgba(212,175,55,0.02)",
+      lineWidth: 2, visible: false });
     const vol = chart.addHistogramSeries({ priceFormat: { type: "volume" }, priceScaleId: "vol", lastValueVisible: false, priceLineVisible: false });
     chart.priceScale("vol").applyOptions({ scaleMargins: { top: 0.86, bottom: 0 } });
-    api.current = { chart, series, vol };
+    api.current = { chart, series, line, area, vol };
 
     const setLegend = (c) => {
       if (!legendRef.current || !c) return;
@@ -59,7 +63,7 @@ export default function Chart({ candles, dataKey, analysis, own, tf, layers, mar
     };
     api.current.setLegend = setLegend;
     chart.subscribeCrosshairMove((param) => {
-      const c = param.seriesData?.get(series);
+      const c = param.time != null ? state.current.byTime?.get(param.time) : null;
       if (c) setLegend(c);
       else if (api.current.last) setLegend(api.current.last);
     });
@@ -109,7 +113,7 @@ export default function Chart({ candles, dataKey, analysis, own, tf, layers, mar
       return times[i] + (l - i) * (times[i + 1] - times[i]);
     };
     const x = (t) => { const l = logicalOf(t); return l == null ? null : ts.logicalToCoordinate(l); };
-    const y = (p) => series.priceToCoordinate(p);
+    const y = (p) => ({ line, area }[props.current.chartType] || series).priceToCoordinate(p);
 
     let raf;
     const loop = () => {
@@ -145,14 +149,14 @@ export default function Chart({ candles, dataKey, analysis, own, tf, layers, mar
 
   // ---------- precision
   useEffect(() => {
-    const { series } = api.current;
+    const { series, line, area } = api.current;
     if (!series) return;
-    series.applyOptions({ priceFormat: { type: "price", precision, minMove: 1 / 10 ** precision } });
+    [series, line, area].forEach((x) => x.applyOptions({ priceFormat: { type: "price", precision, minMove: 1 / 10 ** precision } }));
   }, [precision]);
 
   // ---------- candle data
   useEffect(() => {
-    const { chart, series, vol, setLegend } = api.current;
+    const { chart, series, line, area, vol, setLegend } = api.current;
     if (!chart) return;
     const st = state.current;
     // The view (pair / timeframe) changed but the data that arrived still belongs to the PREVIOUS view (or nothing has
@@ -160,13 +164,17 @@ export default function Chart({ candles, dataKey, analysis, own, tf, layers, mar
     // cause of the chart breaking after a few quick pair / timeframe switches.
     if (dataKey !== undefined && dataKey !== viewKey) {
       if (st.viewKey !== viewKey && st.n) {
-        try { series.setData([]); vol.setData([]); series.setMarkers([]); } catch { /* ignore */ }
+        try { series.setData([]); line.setData([]); area.setData([]); vol.setData([]); series.setMarkers([]); line.setMarkers([]); area.setMarkers([]); } catch { /* ignore */ }
         st.n = 0; st.times = []; st.runs = []; st.first = undefined; st.ver++;
       }
       return;
     }
     if (!candles?.length) return;
-    const data = candles.map((c) => ({ time: c.time, open: c.open, high: c.high, low: c.low, close: c.close }));
+    // slots the feed never printed (inserted flat by the server) are drawn EMPTY on the candle chart - no fake dashes - but
+    // keep their place on the time axis; the line / area charts simply carry the previous price across them.
+    const data = candles.map((c) => (c.filled ? { time: c.time } : { time: c.time, open: c.open, high: c.high, low: c.low, close: c.close }));
+    const lineData = candles.map((c) => ({ time: c.time, value: c.close }));
+    state.current.byTime = new Map(candles.map((c) => [c.time, c]));
     const prevN = st.n, fresh = st.viewKey !== viewKey;
     const vols = candles.map((c) => c.volume || 0);
     const hasVol = hasVolume && vols.some((v) => v > 0);
@@ -195,7 +203,7 @@ export default function Chart({ candles, dataKey, analysis, own, tf, layers, mar
     if (incremental) {
       try {
         for (let i = prevN - 1; i < data.length; i++) {
-          series.update(data[i]);
+          series.update(data[i]); line.update(lineData[i]); area.update(lineData[i]);
           if (hasVol) vol.update(volPoint(i));
         }
       } catch (e) {          // e.g. "Cannot update oldest data": fall back to a clean full reload
@@ -203,7 +211,7 @@ export default function Chart({ candles, dataKey, analysis, own, tf, layers, mar
       }
     }
     if (!didIncremental) {
-      series.setData(data);
+      series.setData(data); line.setData(lineData); area.setData(lineData);
       vol.setData(hasVol ? candles.map((_, i) => volPoint(i)) : []);
       st.fullAt = Date.now();
     }
@@ -223,7 +231,7 @@ export default function Chart({ candles, dataKey, analysis, own, tf, layers, mar
     });
     st.runs = runs;
     st.ver++;
-    api.current.last = { ...data[data.length - 1] };
+    api.current.last = { ...candles[candles.length - 1] };
     setLegend?.(api.current.last);
 
     if (fresh || !range) {
@@ -238,9 +246,20 @@ export default function Chart({ candles, dataKey, analysis, own, tf, layers, mar
     }
   }, [candles, dataKey, viewKey, hasVolume]);
 
-  // ---------- markers
+  // ---------- chart type: candles / line / area (same data, same overlay)
   useEffect(() => {
-    const { series } = api.current;
+    const { series, line, area } = api.current;
+    if (!series) return;
+    series.applyOptions({ visible: chartType === "candles" });
+    line.applyOptions({ visible: chartType === "line" });
+    area.applyOptions({ visible: chartType === "area" });
+    state.current.ver++;
+    state.current.sig = "";
+  }, [chartType]);
+
+  // ---------- markers (drawn on whichever series is showing)
+  useEffect(() => {
+    const { series, line, area } = api.current;
     const times = state.current.times;
     if (!series || !times.length) return;
     const snap = (t) => {
@@ -251,8 +270,9 @@ export default function Chart({ candles, dataKey, analysis, own, tf, layers, mar
     };
     const list = (marks || []).map((m) => ({ ...m, time: snap(m.time) })).filter((m) => m.time)
       .sort((a, b) => a.time - b.time);
-    series.setMarkers(list);
-  }, [marks, candles]);
+    const on = { candles: series, line, area }[chartType] || series;
+    [series, line, area].forEach((x) => x.setMarkers(x === on ? list : []));
+  }, [marks, candles, chartType]);
 
   useEffect(() => { state.current.ver++; }, [analysis, own, layers]);
 

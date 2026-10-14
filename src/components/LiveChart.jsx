@@ -115,7 +115,7 @@ export default function LiveChart({ tf, layers, heightClass, limit = 1000 }) {
     <div className="relative h-full">
       <Chart candles={candles} dataKey={dataKey} analysis={analysis} own={structure} tf={tf} layers={layers} marks={marks} precision={info.precision}
         barSeconds={tfSeconds(tf)} viewKey={viewKey} hasVolume={hasVolume} heightClass={heightClass}
-        onNeedOlder={more ? loadOlder : undefined} />
+        onNeedOlder={more ? loadOlder : undefined} chartType={prefs.chartType || "candles"} />
       {loading && !candles.length && (
         <div className="absolute inset-0 flex items-center justify-center gap-2 text-sm text-gray-500"><Spinner /> Loading {tf} candles…</div>
       )}
