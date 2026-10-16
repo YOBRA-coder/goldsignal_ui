@@ -108,7 +108,7 @@ function useNews(symbol, tf, spanDays, enabled) {
 }
 
 /** One chart bound to live data + the shared analysis overlay. */
-export default function LiveChart({ tf, layers, heightClass, limit = 1000 }) {
+export default function LiveChart({ tf, layers, heightClass, limit = 1000, focus, onFocusDone }) {
   const { prefs, live, history, dataRev } = useLive();
   const { candles: recent, hasVolume, loading, error, structure, key: loadedKey } = useCandles(prefs.symbol, tf, limit, dataRev);
   const { older, more, loadOlder } = useOlder(prefs.symbol, tf, dataRev, recent[0]?.time);
@@ -140,7 +140,7 @@ export default function LiveChart({ tf, layers, heightClass, limit = 1000 }) {
       <Chart candles={candles} dataKey={dataKey} analysis={analysis} own={structure} tf={tf} layers={layers} marks={marks} precision={info.precision}
         barSeconds={tfSeconds(tf)} viewKey={viewKey} hasVolume={hasVolume} heightClass={heightClass}
         onNeedOlder={more ? loadOlder : undefined} chartType={prefs.chartType || "candles"}
-        news={wantNews ? newsData.events : null} newsWin={newsData.win} />
+        news={wantNews ? newsData.events : null} newsWin={newsData.win} focus={focus} onFocusDone={onFocusDone} />
       {loading && !candles.length && (
         <div className="absolute inset-0 flex items-center justify-center gap-2 text-sm text-gray-500"><Spinner /> Loading {tf} candles…</div>
       )}

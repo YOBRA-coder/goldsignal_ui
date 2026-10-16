@@ -18,7 +18,7 @@ const fmtCross = (t) => fmtTime(t, { day: "2-digit", month: "short" });
  *  layers   : {htf, setup, trigger, levels, sessions}
  */
 export default function Chart({ candles, dataKey, analysis, own, tf, layers, marks, precision = 2, barSeconds = 900,
-  viewKey, hasVolume = true, onNeedOlder, chartType = "candles", news, newsWin, heightClass = "h-[340px] md:h-[460px] xl:h-[540px]" }) {
+  viewKey, hasVolume = true, onNeedOlder, chartType = "candles", news, newsWin, focus, onFocusDone, heightClass = "h-[340px] md:h-[460px] xl:h-[540px]" }) {
   const wrapRef = useRef(null);
   const elRef = useRef(null);
   const canvasRef = useRef(null);
@@ -27,6 +27,7 @@ export default function Chart({ candles, dataKey, analysis, own, tf, layers, mar
   const state = useRef({ times: [], runs: [], n: 0, ver: 0, sig: "" });
   const props = useRef({});
   props.current = { analysis, own, tf, layers, precision, barSeconds, onNeedOlder, chartType, news, newsWin };
+  const focusDone = useRef(0);
 
   // ---------- create chart once
   useEffect(() => {
@@ -245,6 +246,20 @@ export default function Chart({ candles, dataKey, analysis, own, tf, layers, mar
       chart.timeScale().setVisibleLogicalRange({ from: range.from + shift, to: range.to + shift });
     }
   }, [candles, dataKey, viewKey, hasVolume]);
+
+  // ---------- range buttons: show the last N days; keep pulling older stored pages until they are covered (or run out)
+  useEffect(() => {
+    const chart = api.current.chart;
+    if (!chart || !focus || focusDone.current === focus.nonce || !candles?.length || dataKey !== viewKey) return;
+    const t = candles.map((c) => c.time);
+    const from = Math.floor(Date.now() / 1000) - focus.days * 86400;
+    if (t[0] > from && onNeedOlder) { onNeedOlder(); return; }     // not covered yet: fetch another stored page
+    let i = 0, j = t.length - 1;
+    while (i < j) { const m = (i + j) >> 1; if (t[m] < from) i = m + 1; else j = m; }
+    chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, i) - 1, to: t.length + 6 });
+    focusDone.current = focus.nonce;
+    onFocusDone?.({ covered: t[0] <= from, first: t[0] });
+  }, [focus, candles, onNeedOlder, dataKey, viewKey]);
 
   // ---------- chart type: candles / line / area (same data, same overlay)
   useEffect(() => {

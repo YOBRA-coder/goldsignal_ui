@@ -66,6 +66,8 @@ function PanelTitle({ step, title, bias, right }) {
 }
 
 const CHART_TYPES = [{ value: "candles", label: "Candles" }, { value: "line", label: "Line" }, { value: "area", label: "Area" }];
+const RANGES = [{ value: 3, label: "3D" }, { value: 7, label: "1W" }, { value: 30, label: "1M" }, { value: 90, label: "3M" }, { value: 180, label: "6M" }, { value: 365, label: "1Y" }];
+
 function ChartTypeSwitch() {
   const { prefs, setPref } = useLive();
   return <Segmented size="sm" value={prefs.chartType || "candles"} onChange={(v) => setPref("chartType", v)} options={CHART_TYPES} />;
@@ -88,6 +90,10 @@ function Expanded({ tf: tf0, layers: l0, onClose }) {
   const setTf = (t) => { setTfRaw(t); setLayers(presetFor(t)); };
   const [fs, setFs] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
+  const [focus, setFocus] = useState(null);
+  const [note, setNote] = useState("");
+  const pickRange = (days) => { setNote(""); setFocus({ days, nonce: Date.now() }); };
+  const rangeDone = ({ covered, first }) => setNote(covered ? "" : `Stored history starts ${new Date(first * 1000).toLocaleDateString()} - nothing older is saved yet`);
   const info = symbolInfo(prefs.symbol);
 
   useEffect(() => {
@@ -114,7 +120,9 @@ function Expanded({ tf: tf0, layers: l0, onClose }) {
           <span className="font-bold text-sm">{info.short}</span>
           <LivePrice />
         </div>
-        <Segmented size="sm" value={tf} onChange={setTf} options={TIMEFRAMES} />
+        <Segmented size="sm" value={tf} onChange={(t) => { setTf(t); setFocus(null); setNote(""); }} options={TIMEFRAMES} />
+        <Segmented size="sm" value={focus?.days} onChange={pickRange} options={RANGES} />
+        {note && <span className="text-[11px] text-amber-400">{note}</span>}
         <div className="hidden md:block"><LayerChips layers={layers} setLayers={setLayers} tf={tf} /></div>
         <div className="ml-auto flex items-center gap-2">
           <ChartTypeSwitch />
@@ -134,7 +142,7 @@ function Expanded({ tf: tf0, layers: l0, onClose }) {
       </div>
       <div className="flex-1 min-h-0 relative">
         {logOpen && <BriefPanel tf={tf} onClose={() => setLogOpen(false)} />}
-        <LiveChart tf={tf} layers={layers} heightClass="h-full" limit={800} />
+        <LiveChart tf={tf} layers={layers} heightClass="h-full" limit={800} focus={focus} onFocusDone={rangeDone} />
       </div>
     </div>
   );
