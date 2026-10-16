@@ -6,6 +6,8 @@ import { useAuth } from "../context/AuthContext.jsx";
 import { LiveProvider, useLive } from "../context/LiveContext";
 import { Chip, ErrorBoundary, Segmented, SymbolSelect } from "./ui";
 import LivePrice from "./LivePrice";
+import { InstallButton } from "./InstallCard";
+import { applyUpdate, usePwa } from "../lib/pwa";
 import { ENTRY_TFS } from "../lib/constants";
 import { cx, fmtAgo, fmtCountdown, fmtTime, timeModeLabel } from "../lib/format";
 
@@ -97,6 +99,17 @@ function AlertBell() {
   );
 }
 
+function UpdateBanner() {
+  const { updateReady } = usePwa();
+  if (!updateReady) return null;
+  return (
+    <div className="flex items-center gap-2 text-xs rounded-xl border border-gold/40 bg-gold/10 text-gold px-3 py-2">
+      <span className="flex-1"><b>A new version of GoldSignal is ready.</b></span>
+      <button onClick={applyUpdate} className="px-3 py-1 rounded-lg bg-gold text-black font-semibold">Update now</button>
+    </div>
+  );
+}
+
 function NewsBanner() {
   const { live } = useLive();
   const n = live?.signal?.news;
@@ -138,6 +151,7 @@ function StatusBanners() {
         </div>
       )}
       <NewsBanner />
+      <UpdateBanner />
       {d?.demo && (
         <div className="text-xs bg-amber-400/10 border border-amber-400/30 text-amber-300 rounded-xl px-3 py-2">
           <b>DEMO DATA</b> — synthetic prices for testing (GOLDSIGNAL_DEMO=1). Do not trade off these signals.
@@ -175,6 +189,7 @@ function TopBar() {
             {d?.lag_sec != null && <span className="text-gray-600">· feed lag {d.lag_sec < 90 ? `${d.lag_sec}s` : `${Math.round(d.lag_sec / 60)}m`}</span>}
             {d?.demo && <Chip tone="amber">DEMO</Chip>}
           </div>
+          <InstallButton className="hidden sm:flex" />
           <button onClick={refresh} aria-label="Refresh" className="w-10 h-10 rounded-xl border border-border bg-panel flex items-center justify-center hover:border-gold/50">
             <RefreshCw size={16} className={cx("text-gray-400", loading && "animate-spin")} />
           </button>

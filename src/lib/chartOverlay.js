@@ -287,6 +287,46 @@ function drawNews(ctx, env) {
   });
 }
 
+// AMD (accumulation -> manipulation -> distribution) of the timeframe being viewed.
+function drawAMD(ctx, env, amd) {
+  if (!amd || !amd.top || amd.phase === "none") return;
+  const { x, y, W } = env;
+  const y1 = y(amd.top), y2 = y(amd.bottom);
+  const x1 = x(amd.start_ts);
+  if (y1 == null || y2 == null || x1 == null) return;
+  const col = "#a78bfa";
+  const x2 = Math.min(W, x(amd.end_ts) ?? W);
+  ctx.fillStyle = rgba(col, 0.07);
+  ctx.fillRect(Math.max(0, x1), y1, Math.max(2, x2 - Math.max(0, x1)), y2 - y1);
+  ctx.save();
+  ctx.strokeStyle = rgba(col, 0.7); ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
+  ctx.strokeRect(Math.max(0, x1), y1, Math.max(2, x2 - Math.max(0, x1)), y2 - y1);
+  ctx.setLineDash([6, 4]);
+  const ym = y((amd.top + amd.bottom) / 2);
+  if (ym != null) { ctx.beginPath(); ctx.moveTo(Math.max(0, x1), ym); ctx.lineTo(W, ym); ctx.globalAlpha = 0.35; ctx.stroke(); }
+  ctx.restore();
+  label(ctx, "A · range", Math.max(4, x1) + 4, y1 + 9, col, { size: 10, bold: true });
+  const sw = amd.sweep;
+  if (sw) {
+    const sx = x(sw.ts), sy = y(sw.extreme);
+    if (sx != null && sy != null) {
+      ctx.fillStyle = COLORS.amber; ctx.beginPath();
+      const up = sw.side === "high";
+      ctx.moveTo(sx, sy + (up ? -2 : 2)); ctx.lineTo(sx - 5, sy + (up ? -10 : 10)); ctx.lineTo(sx + 5, sy + (up ? -10 : 10)); ctx.closePath(); ctx.fill();
+      label(ctx, `M · ${sw.side} raided`, sx + 7, sy + (up ? -10 : 10), COLORS.amber, { size: 10, bold: true, bg: "rgba(11,14,20,0.75)" });
+    }
+  }
+  const dsp = amd.disp;
+  if (dsp) {
+    const dx = x(dsp.ts);
+    if (dx != null) label(ctx, `D · ${amd.dir > 0 ? "up" : "down"}`, dx + 4, (y(amd.dir > 0 ? amd.top : amd.bottom) ?? 40) + (amd.dir > 0 ? -14 : 14), amd.dir > 0 ? COLORS.bull : COLORS.bear,
+      { size: 10, bold: true, bg: "rgba(11,14,20,0.75)" });
+  }
+  const txt = { accumulation: "AMD · accumulating", manipulation_pending: "AMD · raid in progress", manipulation: `AMD · trap set → expect ${amd.dir > 0 ? "UP" : "DOWN"}`,
+    distribution: `AMD · distribution ${amd.dir > 0 ? "UP" : "DOWN"}` }[amd.phase];
+  if (txt) label(ctx, txt, W - 8, env.H - 22, amd.dir > 0 ? COLORS.bull : amd.dir < 0 ? COLORS.bear : col, { align: "right", size: 11, bold: true, bg: "rgba(11,14,20,0.8)" });
+}
+
 export function drawOverlay(ctx, env) {
   const { W, H, layers, analysis: a, precision, tf } = env;
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
@@ -296,6 +336,7 @@ export function drawOverlay(ctx, env) {
   ctx.clip();
   if (layers.sessions) drawSessions(ctx, env);
   if (layers.news) drawNews(ctx, env);
+  if (layers.amd && env.own?.amd) drawAMD(ctx, env, env.own.amd);
   if (a) {
     if (layers.levels) drawLevels(ctx, env, a.levels || [], precision);
     // Structure of the timeframe being viewed (BOS/CHoCH, swings, OB/FVG, liquidity, trend lines).

@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Bell, Cog, HeartPulse, LogOut, MonitorSmartphone, Volume2 } from "lucide-react";
+import InstallCard from "../components/InstallCard";
+import EngineCard from "../components/EngineCard";
 import api from "../api";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useLive } from "../context/LiveContext";
@@ -74,6 +76,8 @@ export default function Profile() {
             <Stat label="Open" value={stats.open_signals} />
           </div>
         )}
+        <EngineCard />
+        <InstallCard />
         <Card title="Alerts" icon={Bell}>
           <Toggle on={prefs.sound} onChange={(v) => setPref("sound", v)} label="Sound alerts" hint="Different tones for a new signal, a take-profit win and a stop-loss loss" />
           <div className="flex items-center justify-between gap-3 py-2">

@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import api from "../api";
 import { errText, setTimeMode } from "../lib/format";
 import { playAlert, unlockAudio } from "../lib/sound";
+import { showNotice } from "../lib/pwa";
 
 const LiveCtx = createContext(null);
 export const useLive = () => useContext(LiveCtx);
@@ -78,9 +79,7 @@ export function LiveProvider({ children }) {
       fresh.forEach((a) => {
         pushToast(a);
         if (prefsRef.current.sound) playAlert(a.kind);
-        if (prefsRef.current.notify && "Notification" in window && Notification.permission === "granted") {
-          try { new Notification(a.title, { body: a.message || "" }); } catch { /* ignore */ }
-        }
+        if (prefsRef.current.notify && document.hidden) showNotice(a.title, a.message || "", `${a.kind}-${a.id}`);
       });
       if (fresh.length) fetchHistory();
     } catch { /* non-fatal */ }

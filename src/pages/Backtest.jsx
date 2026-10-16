@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { FlaskConical, Play } from "lucide-react";
+import { FlaskConical, GitCompare, Play } from "lucide-react";
+import EngineCard from "../components/EngineCard";
 import api from "../api";
 import { Card, Chip, Empty, Segmented, Spinner, Stat, SymbolSelect, Toggle } from "../components/ui";
 import { useLive } from "../context/LiveContext";
@@ -28,7 +29,7 @@ function Equity({ curve }) {
 
 function Why({ d }) {
   if (!d || !d.losers && d.losers !== 0) return null;
-  const rows = [["Agreement", d.by_agreement], ["Pattern", d.by_pattern], ["Zone", d.by_zone], ["Grade", d.by_grade]];
+  const rows = [["AMD", d.by_amd], ["Agreement", d.by_agreement], ["Pattern", d.by_pattern], ["Zone", d.by_zone], ["Grade", d.by_grade]];
   return (
     <Card title="Why trades lose — and where">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -54,6 +55,35 @@ function Why({ d }) {
           </table>
         ))}
       </div>
+    </Card>
+  );
+}
+
+function Compare({ c, onUse }) {
+  const best = c.recommended;
+  return (
+    <Card title={`Which setting loses least? · ${c.symbol} ${c.entry_interval} ${c.style} · ${c.days} days`} icon={GitCompare}>
+      <p className={cx("text-sm mb-3", best ? "text-gold" : "text-amber-300")}>{c.verdict}</p>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm min-w-[720px]">
+          <thead><tr className="text-[11px] uppercase text-gray-500 text-left">
+            <th className="py-1">Setting</th><th>Trades</th><th>Win %</th><th>Avg win / loss</th><th>Net R</th><th>Profit factor</th><th>Max DD</th><th title="the last 30% of the period, judged separately">Last 30% net R</th><th /></tr></thead>
+          <tbody>
+            {c.rows.map((r) => (
+              <tr key={r.key} className={cx("border-t border-border/60 tabular-nums", r.key === best && "bg-gold/5")}>
+                <td className="py-2 pr-2">{r.label}{r.key === best && <Chip tone="gold" className="ml-2">best</Chip>}</td>
+                <td>{r.trades}</td><td>{r.win_rate}%</td>
+                <td className="text-gray-400">{r.avg_win_r != null ? `+${r.avg_win_r}` : "—"} / {r.avg_loss_r ?? "—"}</td>
+                <td className={r.net_r >= 0 ? "text-bull" : "text-bear"}>{r.net_r > 0 ? "+" : ""}{r.net_r}R</td>
+                <td>{r.profit_factor ?? "—"}</td><td className="text-bear">{r.max_drawdown_r}R</td>
+                <td className={r.oos_net_r >= 0 ? "text-bull" : "text-bear"}>{r.oos_trades ? `${r.oos_net_r > 0 ? "+" : ""}${r.oos_net_r}R (${r.oos_trades})` : "—"}</td>
+                <td className="text-right"><button onClick={() => onUse(r)} className="text-xs px-2.5 py-1 rounded-lg border border-border hover:border-gold/50 text-gray-300">Use live</button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-[11px] text-gray-500 mt-2">Same candles, spread and news windows in every row - only the engine strictness changes. A setting that wins overall but loses in the last 30% is probably luck. Fewer than ~30 trades is not enough to trust either way.</p>
     </Card>
   );
 }
@@ -132,12 +162,15 @@ function Result({ r }) {
 }
 
 export default function Backtest() {
-  const { prefs } = useLive();
+  const { prefs, setPref } = useLive();
   const [f, setF] = useState({ symbol: prefs.symbol, entry_interval: prefs.entryTF, risk_reward: prefs.rr, min_agreement: prefs.minAgreement, sessions_only: prefs.sessionsOnly, style: prefs.scalp ? "scalp" : "swing", sens: prefs.sens || "normal", realistic_fill: true, period: "59d", news: "app" });
   const [res, setRes] = useState(null);
   const [runs, setRuns] = useState([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
+  const [cmp, setCmp] = useState(null);
+  const [cbusy, setCbusy] = useState(false);
+  const [applied, setApplied] = useState(0);
 
   const withParams = (r) => ({ ...r, params: { rr: r.stats?.params?.risk_reward } });
   useEffect(() => {
@@ -151,6 +184,18 @@ export default function Backtest() {
       setRes(withParams(data));
       setRuns((x) => [data, ...x]);
     } catch (e) { setErr(errText(e)); } finally { setBusy(false); }
+  }
+
+  async function compare() {
+    setCbusy(true); setErr(null); setCmp(null);
+    try { const { data } = await api.post("/backtest/compare", { ...f, news: f.news === "app" ? null : f.news }); setCmp(data); }
+    catch (e) { setErr(errText(e)); } finally { setCbusy(false); }
+  }
+  async function useRow(r) {
+    await api.put("/engine/settings", { amd: r.engine.amd_mode, quality: r.engine.quality, daily_stop: r.engine.daily_stop });
+    if (r.engine.rr) setPref("rr", r.engine.rr);
+    if (r.engine.rr) setF((x) => ({ ...x, risk_reward: r.engine.rr, breakeven_at_r: r.engine.be ?? x.breakeven_at_r }));
+    setApplied((n) => n + 1);
   }
 
   return (
@@ -172,6 +217,10 @@ export default function Backtest() {
           <button onClick={run} disabled={busy} className="h-10 rounded-xl bg-gold text-black font-bold flex items-center justify-center gap-2 disabled:opacity-60">
             {busy ? <Spinner className="!border-black/30 !border-t-black" /> : <Play size={16} />} {busy ? "Running…" : "Run backtest"}
           </button>
+          <button onClick={compare} disabled={cbusy || busy} title="Same data, six engine settings side by side"
+            className="h-10 rounded-xl border border-gold/50 text-gold font-semibold flex items-center justify-center gap-2 disabled:opacity-60 xl:col-start-5">
+            {cbusy ? <Spinner /> : <GitCompare size={16} />} {cbusy ? "Comparing… (6 runs)" : "Compare settings"}
+          </button>
         </div>
         <div className="max-w-sm mt-1"><Toggle on={f.style === "scalp"} onChange={(v) => setF({ ...f, style: v ? "scalp" : "swing" })} label="Scalp mode (1H-led, short-term)" hint="Off = swing: 4H and 1H must agree" /></div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
@@ -190,6 +239,9 @@ export default function Backtest() {
         <p className="text-xs text-gray-500">Yahoo only serves ~59 days of {f.entry_interval} candles at a time; anything longer comes from the candles this app has stored while running (it keeps growing). If the stored history is shorter than you asked for, the test uses what exists.</p>
         {err && <div className="text-sm text-bear mt-2 break-words">{err}</div>}
       </Card>
+
+      {cmp && <Compare c={cmp} onUse={useRow} />}
+      <div className="max-w-xl"><EngineCard reloadKey={applied} /></div>
 
       {runs.length > 1 && (
         <div className="flex gap-2 overflow-x-auto no-scrollbar">

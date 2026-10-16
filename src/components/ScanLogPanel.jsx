@@ -7,7 +7,7 @@ import { cx, fmtTime } from "../lib/format";
 
 const STATUS_TONE = {
   signal: "gold", waiting_trigger: "blue", waiting_zone: "gray", not_aligned: "gray",
-  no_bias: "gray", out_of_session: "gray", risk_too_wide: "amber", low_agreement: "amber", stretched: "amber", needs_confirmation: "amber", blocked: "amber", no_room: "amber", news: "bear", choppy: "amber",
+  no_bias: "gray", out_of_session: "gray", risk_too_wide: "amber", low_agreement: "amber", stretched: "amber", needs_confirmation: "amber", blocked: "amber", no_room: "amber", amd_against: "amber", news: "bear", choppy: "amber",
   market_closed: "gray",
 };
 
