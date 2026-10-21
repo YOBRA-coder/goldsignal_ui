@@ -75,6 +75,8 @@ export default function Login() {
           <Link to="/register" className="text-gold hover:underline">
             Create one
           </Link>
+          <span className="mx-2 text-gray-700">·</span>
+          <Link to="/manual" className="text-gray-400 hover:text-gold">How it works</Link>
         </p>
       </div>
     </div>

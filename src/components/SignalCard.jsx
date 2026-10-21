@@ -3,13 +3,14 @@ import { ArrowDownRight, ArrowUpRight, CheckCircle2, Clock, Minus, Target, Trend
 import { Card, Chip, Ring } from "./ui";
 import { useLive } from "../context/LiveContext";
 import LivePrice from "./LivePrice";
+import PreviewLine from "./PreviewLine";
 import { symbolInfo, SESSION_LABELS } from "../lib/constants";
 import { cx, fmtAgo, fmtDateTime, fmtPrice, fmtTime } from "../lib/format";
 
 const STEPS = ["4H direction", "4H map", "1H setup", "Entry trigger"];
 
 export default function SignalCard() {
-  const { live, prefs, loading, error } = useLive();
+  const { live, prefs, loading, error, openChart } = useLive();
   const [, tick] = useState(0);
   useEffect(() => { const t = setInterval(() => tick((x) => x + 1), 15000); return () => clearInterval(t); }, []);
   const s = live?.signal;
@@ -30,7 +31,7 @@ export default function SignalCard() {
 
   return (
     <Card title="Signal" icon={Target}
-      right={<Chip tone={s.session?.allowed ? "bull" : "gray"}><Clock size={11} /> {s.session?.label}</Chip>}
+      right={<div className="flex items-center gap-1.5"><button onClick={() => openChart({ symbol: prefs.symbol, tf: prefs.entryTF, title: s.headline })} className="text-[11px] px-2 py-0.5 rounded-full border border-border text-gray-400 hover:text-gold hover:border-gold/50">Full chart</button><Chip tone={s.session?.allowed ? "bull" : "gray"}><Clock size={11} /> {s.session?.label}</Chip></div>}
       className={cx(buy && "border-bull/40", sell && "border-bear/40")}>
       <div className="flex items-center gap-4">
         <Ring value={s.agreement} tone={buy ? "bull" : sell ? "bear" : s.agreement >= prefs.minAgreement ? "gold" : "gray"} />
@@ -85,6 +86,12 @@ export default function SignalCard() {
             <Level k="Target" v={fmtPrice(s.take_profit, p)} c="text-bull" />
           </div>
           {s.risk != null && <div className="text-[11px] text-gray-500 mt-2 text-center">Risk {s.risk.toFixed(p)} pts per unit</div>}
+          {s.entry_price != null && s.stop_loss != null && s.take_profit != null && (
+            <div className="mt-3">
+              <PreviewLine symbol={prefs.symbol} interval={prefs.entryTF} direction={planDir} entry={s.entry_price} sl={s.stop_loss} tp={s.take_profit}
+                firedTs={buy || sell ? s.candle_ts : null} status={buy || sell ? "open" : "plan"} height={130} eager />
+            </div>
+          )}
         </div>
       )}
 

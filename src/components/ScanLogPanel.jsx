@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { ChevronDown, Check, Minus, X } from "lucide-react";
+import { ChevronDown, Check, Maximize2, Minus, X } from "lucide-react";
 import api from "../api";
 import { Card, Chip, Empty, Segmented } from "./ui";
 import { useLive } from "../context/LiveContext";
@@ -27,7 +27,7 @@ function Checks({ checks }) {
 }
 
 function Previews({ previews }) {
-  const entries = Object.entries(previews || {}).filter(([k, v]) => v && k !== "highlights");
+  const entries = Object.entries(previews || {}).filter(([k, v]) => v && k !== "highlights" && k !== "snapshot");
   const highlights = previews?.highlights || [];
   if (!entries.length && !highlights.length) return null;
   return (
@@ -41,7 +41,7 @@ function Previews({ previews }) {
 }
 
 export default function ScanLogPanel() {
-  const { prefs } = useLive();
+  const { prefs, openChart } = useLive();
   const [rows, setRows] = useState([]);
   const [open, setOpen] = useState(null);
   const [live, setLiveOn] = useState(true);
@@ -87,6 +87,9 @@ export default function ScanLogPanel() {
               </button>
               {open === idx && (
                 <div className="pl-14 pr-2">
+                  <button onClick={() => openChart({ symbol: prefs.symbol, tf: r.entry_interval || prefs.entryTF, title: r.status.replace(/_/g, " "), note: r.headline,
+                      firedTs: r.ts, plan: r.snapshot?.entry != null && r.direction ? { ts: r.ts, direction: r.direction, entry: r.snapshot.entry, sl: r.snapshot.sl, tp: r.snapshot.tp } : undefined })}
+                    className="mt-1 text-[11px] text-gold hover:underline flex items-center gap-1"><Maximize2 size={11} /> Open the full chart for this moment</button>
                   <Checks checks={r.checks} />
                   <Previews previews={r.previews} />
                 </div>

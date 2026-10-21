@@ -1,46 +1,43 @@
 import React, { useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
-import { Newspaper, Activity, AlertTriangle, BarChart3, Bell, CheckCircle2, CircleUser, FlaskConical, GitCompareArrows, Info,
-  LayoutDashboard, LineChart, ListChecks, LogOut, RefreshCw, X, XCircle, Zap, Crosshair } from "lucide-react";
+import { Newspaper, AlertTriangle, BarChart3, Bell, BookOpen, CircleUser, FlaskConical,
+  LayoutDashboard, LineChart, ListChecks, LogOut, MoreHorizontal, RefreshCw, X } from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
 import { LiveProvider, useLive } from "../context/LiveContext";
 import { Chip, ErrorBoundary, Segmented, SymbolSelect } from "./ui";
 import LivePrice from "./LivePrice";
+import ChartModal from "./ChartModal";
+import { ActivityLog, AlertsFeed, HappeningNow } from "./AlertsBoard";
 import { InstallButton } from "./InstallCard";
 import { applyUpdate, usePwa } from "../lib/pwa";
+import { useActivity, useBoard } from "../lib/board";
+import { KIND_STYLE as kindStyle } from "../lib/alertKinds";
 import { ENTRY_TFS } from "../lib/constants";
 import { cx, fmtAgo, fmtCountdown, fmtTime, timeModeLabel } from "../lib/format";
 
 const NAV = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
   { to: "/charts", label: "Charts", icon: LineChart },
+  { to: "/alerts", label: "Alerts", icon: Bell },
+  { to: "/signals", label: "Signals", icon: ListChecks },
   { to: "/market", label: "Market", icon: BarChart3 },
   { to: "/news", label: "News", icon: Newspaper },
-  { to: "/signals", label: "Signals", icon: ListChecks },
   { to: "/backtest", label: "Backtest", icon: FlaskConical },
+  { to: "/guide", label: "Manual", icon: BookOpen },
   { to: "/profile", label: "Profile", icon: CircleUser },
 ];
-
-const kindStyle = {
-  signal: { icon: Zap, cls: "text-gold border-gold/40 bg-gold/10" },
-  win: { icon: CheckCircle2, cls: "text-bull border-bull/40 bg-bull/10" },
-  loss: { icon: XCircle, cls: "text-bear border-bear/40 bg-bear/10" },
-  shift: { icon: GitCompareArrows, cls: "text-violet-400 border-violet-400/40 bg-violet-400/10" },
-  info: { icon: Info, cls: "text-blue-400 border-blue-400/40 bg-blue-400/10" },
-  setup: { icon: Crosshair, cls: "text-cyan-400 border-cyan-400/40 bg-cyan-400/10" },
-  news: { icon: Newspaper, cls: "text-red-400 border-red-400/40 bg-red-400/10" },
-  update: { icon: Activity, cls: "text-amber-400 border-amber-400/40 bg-amber-400/10" },
-};
+const MOBILE_MAIN = NAV.slice(0, 4);
+const MOBILE_MORE = NAV.slice(4);
 
 function Toasts() {
-  const { toasts, dismissToast } = useLive();
+  const { toasts, dismissToast, openChart, prefs } = useLive();
   return (
     <div className="fixed z-[60] top-3 right-3 left-3 sm:left-auto sm:w-96 space-y-2 pointer-events-none">
       {toasts.map((t) => {
         const k = kindStyle[t.kind] || kindStyle.info;
         const Icon = k.icon;
         return (
-          <div key={t.id} onClick={() => dismissToast(t.id)}
+          <div key={t.id} onClick={() => { dismissToast(t.id); if (t.symbol) openChart({ symbol: t.symbol, tf: prefs.entryTF, title: t.title, note: t.message }); }}
             className={cx("pointer-events-auto cursor-pointer rounded-xl border backdrop-blur bg-panel/95 shadow-2xl p-3 flex gap-3 animate-[slidein_.25s_ease-out]", k.cls)}>
             <Icon size={22} className="shrink-0 mt-0.5" />
             <div className="min-w-0">
@@ -55,8 +52,34 @@ function Toasts() {
   );
 }
 
+function BellPanel({ onClose }) {
+  const { prefs, alerts, unseen, markRead } = useLive();
+  const [tab, setTab] = useState("alerts");
+  const board = useBoard(prefs, { auto: false, pollMs: 15000 });
+  const log = useActivity(20000);
+  const live = board.rows.filter((r) => r.category === "signal" || r.category === "setup" || r.category === "watch");
+  const tabs = [["alerts", `Alerts${unseen ? ` (${unseen})` : ""}`], ["now", `Happening now (${live.length})`], ["log", "Log"]];
+  return (
+    <>
+      <div className="fixed inset-0 z-40" onClick={onClose} />
+      <div className="fixed sm:absolute right-2 left-2 sm:left-auto top-14 sm:top-full sm:right-0 sm:mt-2 z-50 sm:w-[440px] max-h-[80vh] overflow-y-auto bg-bg border border-border rounded-2xl shadow-2xl"
+        onClick={(e) => { if (e.target.closest("button[title='Open the full chart'],button[aria-label='Open chart']")) onClose(); }}>
+        <div className="sticky top-0 z-10 bg-bg flex items-center gap-1 px-3 pt-3 pb-2 border-b border-border">
+          <Segmented size="sm" value={tab} onChange={setTab} options={tabs.map(([value, label]) => ({ value, label }))} />
+          <NavLink to="/alerts" onClick={onClose} className="ml-auto text-xs text-gold hover:underline whitespace-nowrap">Open page</NavLink>
+        </div>
+        <div className="p-2">
+          {tab === "alerts" && <AlertsFeed limit={20} />}
+          {tab === "now" && <HappeningNow board={board} entryTF={prefs.entryTF} minAgreement={prefs.minAgreement} />}
+          {tab === "log" && <ActivityLog rows={log} entryTF={prefs.entryTF} limit={30} />}
+        </div>
+      </div>
+    </>
+  );
+}
+
 function AlertBell() {
-  const { alerts, unseen, markRead } = useLive();
+  const { unseen } = useLive();
   const [open, setOpen] = useState(false);
   return (
     <div className="relative">
@@ -67,34 +90,7 @@ function AlertBell() {
           <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-bear text-[10px] font-bold flex items-center justify-center">{unseen > 9 ? "9+" : unseen}</span>
         )}
       </button>
-      {open && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 mt-2 z-50 w-[min(92vw,380px)] bg-panel border border-border rounded-2xl shadow-2xl overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-              <span className="text-sm font-semibold">Alerts</span>
-              <button onClick={() => markRead(null)} className="text-xs text-gold hover:underline">Mark all read</button>
-            </div>
-            <ul className="max-h-[60vh] overflow-y-auto divide-y divide-border/60">
-              {alerts.length === 0 && <li className="p-6 text-center text-sm text-gray-500">No alerts yet. Signals, take-profits and stop-losses show up here.</li>}
-              {alerts.map((a) => {
-                const k = kindStyle[a.kind] || kindStyle.info;
-                const Icon = k.icon;
-                return (
-                  <li key={a.id} className={cx("flex gap-3 px-4 py-3", !a.seen && "bg-white/[0.03]")}>
-                    <Icon size={18} className={cx("mt-0.5 shrink-0", k.cls.split(" ")[0])} />
-                    <div className="min-w-0">
-                      <div className="text-sm font-medium flex items-center gap-2">{a.title}{!a.seen && <span className="w-1.5 h-1.5 rounded-full bg-gold" />}</div>
-                      <div className="text-xs text-gray-400 break-words">{a.message}</div>
-                      <div className="text-[11px] text-gray-600 mt-0.5">{fmtAgo(a.created_at)}</div>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        </>
-      )}
+      {open && <BellPanel onClose={() => setOpen(false)} />}
     </div>
   );
 }
@@ -206,8 +202,9 @@ function TopBar() {
 
 function Shell() {
   const { user, logout } = useAuth();
-  const { prefs } = useLive();
+  const { prefs, chartItem, closeChart } = useLive();
   const loc = useLocation();
+  const [more, setMore] = useState(false);
   return (
     <div className="min-h-screen bg-bg text-gray-100 lg:pl-60">
       {/* desktop sidebar */}
@@ -216,7 +213,7 @@ function Shell() {
           <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-gold to-yellow-600 flex items-center justify-center font-black text-black">G</div>
           <div><div className="font-bold leading-tight">Gold<span className="text-gold">Signal</span></div><div className="text-[10px] text-gray-500 uppercase tracking-wider">4H → 1H → 5/15m</div></div>
         </div>
-        <nav className="space-y-1 flex-1">
+        <nav className="space-y-1 flex-1 overflow-y-auto">
           {NAV.map(({ to, label, icon: Icon, end }) => (
             <NavLink key={to} to={to} end={end}
               className={({ isActive }) => cx("flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors",
@@ -239,14 +236,31 @@ function Shell() {
       </main>
 
       {/* mobile bottom nav */}
-      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-panel/95 backdrop-blur border-t border-border grid grid-cols-7 pb-[env(safe-area-inset-bottom)]">
-        {NAV.map(({ to, label, icon: Icon, end }) => (
+      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-panel/95 backdrop-blur border-t border-border grid grid-cols-5 pb-[env(safe-area-inset-bottom)]">
+        {MOBILE_MAIN.map(({ to, label, icon: Icon, end }) => (
           <NavLink key={to} to={to} end={end}
             className={({ isActive }) => cx("flex flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-medium", isActive ? "text-gold" : "text-gray-500")}>
             <Icon size={20} />{label}
           </NavLink>
         ))}
+        <button onClick={() => setMore((v) => !v)} className={cx("flex flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-medium", MOBILE_MORE.some((n) => loc.pathname.startsWith(n.to)) ? "text-gold" : "text-gray-500")}>
+          <MoreHorizontal size={20} />More
+        </button>
       </nav>
+      {more && (
+        <>
+          <div className="lg:hidden fixed inset-0 z-40" onClick={() => setMore(false)} />
+          <div className="lg:hidden fixed z-50 right-2 bottom-[calc(4.2rem+env(safe-area-inset-bottom))] w-56 bg-panel border border-border rounded-2xl shadow-2xl p-1.5">
+            {MOBILE_MORE.map(({ to, label, icon: Icon }) => (
+              <NavLink key={to} to={to} onClick={() => setMore(false)}
+                className={({ isActive }) => cx("flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium", isActive ? "bg-gold/10 text-gold" : "text-gray-300")}>
+                <Icon size={18} />{label}
+              </NavLink>
+            ))}
+          </div>
+        </>
+      )}
+      {chartItem && <ChartModal key={`${chartItem.symbol}-${chartItem.tf}-${chartItem.title}`} item={chartItem} onClose={closeChart} />}
       <Toasts />
     </div>
   );

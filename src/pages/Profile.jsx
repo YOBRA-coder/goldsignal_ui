@@ -3,6 +3,7 @@ import { Bell, Cog, HeartPulse, LogOut, MonitorSmartphone, Volume2 } from "lucid
 import InstallCard from "../components/InstallCard";
 import EngineCard from "../components/EngineCard";
 import HistoryCard from "../components/HistoryCard";
+import InviteCard from "../components/InviteCard";
 import api from "../api";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useLive } from "../context/LiveContext";
@@ -77,6 +78,7 @@ export default function Profile() {
             <Stat label="Open" value={stats.open_signals} />
           </div>
         )}
+        <InviteCard />
         <EngineCard />
         <HistoryCard />
         <InstallCard />

@@ -1,6 +1,7 @@
 import React from "react";
 import { Activity } from "lucide-react";
 import { Card, Chip } from "./ui";
+import PreviewLine from "./PreviewLine";
 import { useLive } from "../context/LiveContext";
 import { symbolInfo } from "../lib/constants";
 import { cx, fmtAgo, fmtDateTime, fmtPrice } from "../lib/format";
@@ -35,6 +36,10 @@ function Trade({ a }) {
         <div><div className="text-[10px] text-gray-500 uppercase">{a.be_moved ? "Stop (BE)" : "Stop"}</div>
           <span className={a.be_moved ? "text-gray-300" : "text-bear"}>{fmtPrice(a.current_sl ?? a.stop_loss, p)}</span></div>
         <div><div className="text-[10px] text-gray-500 uppercase">Target</div><span className="text-bull">{fmtPrice(a.take_profit, p)}</span></div>
+      </div>
+      <div className="mt-2.5">
+        <PreviewLine symbol={a.symbol} interval={a.entry_interval || "15m"} direction={a.direction} entry={a.entry_price} sl={a.current_sl ?? a.stop_loss} tp={a.take_profit}
+          firedTs={a.trigger_ts || Math.floor(new Date(a.created_at).getTime() / 1000)} status="open" height={120} legend={false} />
       </div>
       <div className="h-1.5 rounded-full bg-white/5 mt-2.5 overflow-hidden">
         <div className={cx("h-full rounded-full", r >= 0 ? "bg-bull" : "bg-bear")} style={{ width: `${Math.max(4, prog * 100)}%` }} />

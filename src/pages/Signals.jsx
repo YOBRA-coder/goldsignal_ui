@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { ChevronDown, Check, X, Minus } from "lucide-react";
+import { ChevronDown, Check, X, Minus, Maximize2 } from "lucide-react";
 import api from "../api";
 import { Card, Chip, Empty, Segmented, Stat } from "../components/ui";
 import ScanLogPanel from "../components/ScanLogPanel";
+import PreviewLine from "../components/PreviewLine";
 import { useLive } from "../context/LiveContext";
 import { cx, errText, fmtDateTime, fmtPrice } from "../lib/format";
 import { symbolInfo } from "../lib/constants";
@@ -28,7 +29,8 @@ function Detail({ id }) {
 }
 
 export default function Signals() {
-  const { history, fetchHistory } = useLive();
+  const { history, fetchHistory, openChart } = useLive();
+  const [hidden, setHidden] = useState({});          // previews the user collapsed
   const [filter, setFilter] = useState("all");
   const [open, setOpen] = useState(null);
   const [stats, setStats] = useState(null);
@@ -67,8 +69,12 @@ export default function Signals() {
         {err && <div className="text-sm text-bear mb-2">{err}</div>}
         {!rows.length ? <Empty>No signals in this view yet.</Empty> : (
           <ul className="divide-y divide-border/60">
-            {rows.map((r) => {
+            {rows.map((r, idx) => {
               const p = symbolInfo(r.symbol).precision;
+              const firedTs = r.trigger_ts ? r.trigger_ts + 0 : Math.floor(new Date(r.created_at).getTime() / 1000);
+              const closedTs = r.closed_at ? Math.floor(new Date(r.closed_at).getTime() / 1000) : null;
+              const showPrev = hidden[r.id] === undefined ? idx < 8 : !hidden[r.id];
+              const plan = { ts: firedTs, direction: r.direction, entry: r.entry_price, sl: r.stop_loss, tp: r.take_profit, current_sl: r.current_sl, be_moved: r.be_moved };
               return (
                 <li key={r.id} className="py-3">
                   <button className="w-full text-left" onClick={() => setOpen(open === r.id ? null : r.id)}>
@@ -97,6 +103,21 @@ export default function Signals() {
                       <span><span className="text-gray-500">TP </span><span className="text-bull">{fmtPrice(r.take_profit, p)}</span></span>
                     </div>
                   </button>
+                  <div className="mt-1.5 flex items-center gap-3 text-[11px]">
+                    <button onClick={() => setHidden({ ...hidden, [r.id]: showPrev })} className="text-blue-400 hover:underline flex items-center gap-1">
+                      <ChevronDown size={11} className={cx("transition-transform", !showPrev && "-rotate-90")} />{showPrev ? "Hide preview" : "Show preview"}
+                    </button>
+                    <button onClick={() => openChart({ symbol: r.symbol, tf: r.entry_interval || "15m", firedTs, plan, title: `${r.direction} ${r.status}`,
+                        note: r.reason ? undefined : undefined })} className="text-gray-400 hover:text-gold flex items-center gap-1">
+                      <Maximize2 size={11} /> Full chart
+                    </button>
+                  </div>
+                  {showPrev && (
+                    <div className="mt-1.5">
+                      <PreviewLine symbol={r.symbol} interval={r.entry_interval || "15m"} direction={r.direction} entry={r.entry_price}
+                        sl={r.stop_loss} tp={r.take_profit} firedTs={firedTs} closedTs={closedTs} outcomePrice={r.outcome_price} status={r.status} />
+                    </div>
+                  )}
                   {open === r.id && (
                     <div className="mt-2 pl-1">
                       {r.health_note && r.status === "open" && <p className="text-xs text-gray-400 mb-1">{r.health_note}</p>}

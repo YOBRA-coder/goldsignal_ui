@@ -14,23 +14,24 @@ const LAYER_DEFS = [
   { key: "setup", label: "1H setup", hint: "1H OB/FVG, liquidity, trend lines, structure" },
   { key: "trigger", label: "Trigger", hint: "Entry candle, mini BOS, entry/SL/TP" },
   { key: "levels", label: "Levels", hint: "PDH/PDL/PWH/PWL, opens, sessions, round numbers" },
-  { key: "sessions", label: "Sessions", hint: "London / New York / Asia bands" },
+  { key: "sessions", label: "Sessions", hint: "London / New York / Asia bands + the Asia and London range boxes" },
+  { key: "pd", label: "Prem/Disc", hint: "Premium / discount of the current range with the 50% equilibrium line, and strong / weak highs & lows" },
   { key: "amd", label: "AMD", hint: "Accumulation range -> manipulation (raid of its high/low that closes back inside) -> distribution, on the timeframe you are viewing" },
   { key: "news", label: "News", hint: "CPI / NFP / FOMC and other releases: line + blackout band + how far price moved afterwards. Signals pause inside the band." },
   { key: "history", label: "Past signals", hint: "Signals the engine would have given on the candles you scroll back to, how each went, and near-misses (amber)" },
 ];
-export const DEFAULT_LAYERS = { own: true, htf: true, setup: true, trigger: true, levels: true, sessions: true, news: true, amd: true, history: true };
+export const DEFAULT_LAYERS = { pd: true, own: true, htf: true, setup: true, trigger: true, levels: true, sessions: true, news: true, amd: true, history: true };
 
 /** Sensible overlays per timeframe so candles stay readable (you can still toggle anything). */
 export function presetFor(tf) {
-  const off = { own: false, htf: false, setup: false, trigger: false, levels: false, sessions: false, news: false, amd: false, history: false };
+  const off = { pd: false, own: false, htf: false, setup: false, trigger: false, levels: false, sessions: false, news: false, amd: false, history: false };
   if (["1d", "1w"].includes(tf)) return { ...off, own: true, levels: true };
-  if (tf === "4h") return { ...off, own: true, levels: true, trigger: true, news: true, amd: true };
-  if (tf === "1h") return { ...off, own: true, htf: true, levels: true, trigger: true, sessions: true, news: true, amd: true };
+  if (tf === "4h") return { ...off, own: true, pd: true, levels: true, trigger: true, news: true, amd: true };
+  if (tf === "1h") return { ...off, own: true, pd: true, htf: true, levels: true, trigger: true, sessions: true, news: true, amd: true };
   return { ...off, own: true, setup: true, trigger: true, levels: true, sessions: true, news: true, amd: true, history: true };   // 1m-30m
 }
 
-function LayerChips({ layers, setLayers, tf }) {
+export function LayerChips({ layers, setLayers, tf }) {
   // on 4H the "4H map" IS the own-TF layer, on 1H the "1H setup" is - don't offer duplicates
   const defs = LAYER_DEFS.filter((l) => !(l.key === "htf" && tf === "4h") && !(l.key === "setup" && tf === "1h"));
   return (
@@ -65,10 +66,10 @@ function PanelTitle({ step, title, bias, right }) {
   );
 }
 
-const CHART_TYPES = [{ value: "candles", label: "Candles" }, { value: "line", label: "Line" }, { value: "area", label: "Area" }];
+export const CHART_TYPES = [{ value: "candles", label: "Candles" }, { value: "line", label: "Line" }, { value: "area", label: "Area" }];
 const RANGES = [{ value: 3, label: "3D" }, { value: 7, label: "1W" }, { value: 30, label: "1M" }, { value: 90, label: "3M" }, { value: 180, label: "6M" }, { value: 365, label: "1Y" }];
 
-function ChartTypeSwitch() {
+export function ChartTypeSwitch() {
   const { prefs, setPref } = useLive();
   return <Segmented size="sm" value={prefs.chartType || "candles"} onChange={(v) => setPref("chartType", v)} options={CHART_TYPES} />;
 }
@@ -165,8 +166,8 @@ export default function ChartPanel({ tall = false }) {
 
   if (prefs.layout === "topdown") {
     const h = tall ? "h-[300px] md:h-[360px]" : "h-[260px] md:h-[300px]";
-    const L4 = { own: true, levels: true, sessions: false, news: true, amd: true };
-    const L1 = { own: true, sessions: layers.sessions, news: true, amd: true };
+    const L4 = { own: true, pd: true, levels: true, sessions: false, news: true, amd: true };
+    const L1 = { own: true, pd: true, sessions: layers.sessions, news: true, amd: true };
     const LE = { own: true, setup: true, trigger: true, sessions: layers.sessions, news: true, amd: true };
     return (
       <div className="space-y-3">
@@ -214,7 +215,7 @@ export default function ChartPanel({ tall = false }) {
         <Legend c="#12b886" t="Demand / bull OB" /><Legend c="#ff4d4f" t="Supply / bear OB" />
         <Legend c="#3b82f6" t="Bull FVG" /><Legend c="#f59e0b" t="Bear FVG · CHoCH · PDH/PDL" />
         <Legend c="#a78bfa" t="Liquidity (EQH/EQL/BSL/SSL)" /><Legend c="#c084fc" t="Trend line" />
-        <Legend c="#a78bfa" t="AMD range · M raid · D distribution" /><Legend c="#ff4d4f" t="News release / blackout band" /><Legend c="#22d3ee" t="Mini BOS · zone touch" /><Legend c="#f59e0b" t="Near-miss (rule blocked it)" /><Legend c="#d4af37" t="Zone hit / entry" />
+        <Legend c="#a78bfa" t="AMD range · M raid · D distribution" /><Legend c="#ff4d4f" t="News release / blackout band" /><Legend c="#22d3ee" t="Mini BOS · zone touch" /><Legend c="#f59e0b" t="Near-miss (rule blocked it)" /><Legend c="#d4af37" t="Zone hit / entry · strong high/low" /><Legend c="#94a3b8" t="EQ 50% · weak high/low · BE" />
         <SessionKey />
       </div>
     </div>

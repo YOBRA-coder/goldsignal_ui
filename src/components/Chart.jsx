@@ -134,7 +134,7 @@ export default function Chart({ candles, dataKey, analysis, own, tf, layers, mar
       try {
         drawOverlay(ctx, {
           W, H, x, y, tAtX: (px) => timeAtLogical(ts.coordinateToLogical(px) ?? st.n - 1),
-          analysis: a, own: ownS, tf: tfc, layers: ly || {}, precision: pr, news: nws, newsWin: nwin, sessionRuns: st.runs, compact: el.clientWidth < 560,
+          analysis: a, own: ownS, tf: tfc, layers: ly || {}, precision: pr, news: nws, newsWin: nwin, sessionRuns: st.runs, compact: el.clientWidth < 560, barSeconds: props.current.barSeconds,
         });
       } catch (e) { /* a bad overlay payload (e.g. data from the previous pair) must never break the chart */ }
     };

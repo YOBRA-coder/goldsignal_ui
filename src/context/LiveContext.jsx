@@ -31,6 +31,9 @@ export function LiveProvider({ children }) {
   const [history, setHistory] = useState([]);
   const [quote, setQuote] = useState(null);
   const [dataRev, setDataRev] = useState(0);
+  const [chartItem, setChartItem] = useState(null);      // pair shown in the full-chart pop-up (null = closed)
+  const openChart = useCallback((item) => setChartItem(item), []);
+  const closeChart = useCallback(() => setChartItem(null), []);
   const reqId = useRef(0);
   const liveCtl = useRef(null);      // aborts the analysis request that is still running when inputs change
   const lastAlertId = useRef(null);
@@ -183,7 +186,8 @@ export function LiveProvider({ children }) {
   const value = useMemo(() => ({
     prefs, setPref, live, quote, dataRev, bumpData, error, loading, lastUpdate, refresh,
     alerts, unseen, markRead, toasts, dismissToast, history, fetchHistory, enableDesktop, sendTest,
-  }), [prefs, setPref, live, quote, dataRev, bumpData, error, loading, lastUpdate, refresh, alerts, unseen, markRead, toasts,
+    chartItem, openChart, closeChart,
+  }), [chartItem, openChart, closeChart, prefs, setPref, live, quote, dataRev, bumpData, error, loading, lastUpdate, refresh, alerts, unseen, markRead, toasts,
        dismissToast, history, fetchHistory, enableDesktop, sendTest]);
 
   return <LiveCtx.Provider value={value}>{children}</LiveCtx.Provider>;

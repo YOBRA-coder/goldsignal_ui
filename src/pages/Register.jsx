@@ -1,10 +1,13 @@
 import React, { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
 
 export default function Register() {
   const { register } = useAuth();
   const nav = useNavigate();
+  const [qs] = useSearchParams();
+  const ref = (qs.get("ref") || (() => { try { return localStorage.getItem("gs_ref"); } catch { return null; } })() || "").trim();
+  if (qs.get("ref")) { try { localStorage.setItem("gs_ref", qs.get("ref")); } catch { /* ignore */ } }
   const [form, setForm] = useState({
     name: "", username: "", email: "", password: "", confirm_password: "",
   });
@@ -20,7 +23,8 @@ export default function Register() {
     }
     setLoading(true);
     try {
-      await register(form);
+      await register(ref ? { ...form, ref } : form);
+      try { localStorage.removeItem("gs_ref"); } catch { /* ignore */ }
       nav("/");
     } catch (err) {
       const detail = err?.response?.data?.detail;
@@ -51,6 +55,7 @@ export default function Register() {
             G
           </div>
           <h1 className="text-2xl font-bold">Create your account</h1>
+          {ref && <p className="text-xs text-gold mt-1">You were invited by @{ref.replace(/^@/, "")}</p>}
         </div>
 
         <form onSubmit={onSubmit} className="bg-panel border border-border rounded-2xl p-6 space-y-4">

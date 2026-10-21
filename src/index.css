@@ -26,7 +26,7 @@ body {
 
 @keyframes slidein { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: none; } }
 
-input, select, button { font: inherit; }
+@layer base { input, select, button { font: inherit; } }
 select option { background: #12161c; }
 input[type="range"] { accent-color: #d4af37; }
 

@@ -107,11 +107,16 @@ function useNews(symbol, tf, spanDays, enabled) {
   return r;
 }
 
-/** One chart bound to live data + the shared analysis overlay. */
-export default function LiveChart({ tf, layers, heightClass, limit = 1000, focus, onFocusDone }) {
+/** One chart bound to live data + the shared analysis overlay.
+ *  `symbol` / `peek` let the pop-up show ANY pair: peek = {analysis, open_trades} from /signals/peek for that pair.
+ *  `plan` draws one extra trade (entry / stop / target) - used when opening a past signal. */
+export default function LiveChart({ tf, layers, heightClass, limit = 1000, focus, onFocusDone, symbol, peek, plan, historyRows }) {
   const { prefs, live, history, dataRev } = useLive();
-  const { candles: recent, hasVolume, loading, error, structure, key: loadedKey } = useCandles(prefs.symbol, tf, limit, dataRev);
-  const { older, more, loadOlder } = useOlder(prefs.symbol, tf, dataRev, recent[0]?.time);
+  const sym = symbol || prefs.symbol;
+  const own_ = sym === prefs.symbol && !peek;
+  const src = own_ ? live : peek;
+  const { candles: recent, hasVolume, loading, error, structure, key: loadedKey } = useCandles(sym, tf, limit, dataRev);
+  const { older, more, loadOlder } = useOlder(sym, tf, dataRev, recent[0]?.time);
   const candles = useMemo(() => {
     if (!older.length) return recent;
     const first = recent[0]?.time ?? Infinity;
@@ -119,22 +124,25 @@ export default function LiveChart({ tf, layers, heightClass, limit = 1000, focus
   }, [older, recent]);
   const spanDays = candles.length ? (Date.now() / 1000 - candles[0].time) / 86400 : 14;
   const wantReplay = ENTRY_SET.includes(tf) && prefs.showReplay !== false && layers?.history !== false;
-  const replay = useReplay(prefs.symbol, tf, prefs, spanDays, wantReplay);
+  const replay = useReplay(sym, tf, prefs, spanDays, wantReplay);
   const wantNews = layers?.news !== false && !!layers?.news;
-  const newsData = useNews(prefs.symbol, tf, spanDays, wantNews);
-  const here = useMemo(() => (live?.open_trades || []).filter((t) => t.symbol === prefs.symbol), [live, prefs.symbol]);
-  const marks = useMemo(() => buildMarks(live?.analysis, history, here, wantReplay ? replay : null), [live, history, here, replay, wantReplay]);
+  const newsData = useNews(sym, tf, spanDays, wantNews);
+  const hist = historyRows || (own_ ? history : []);
+  const here = useMemo(() => (src?.open_trades || []).filter((t) => t.symbol === sym), [src, sym]);
+  const marks = useMemo(() => buildMarks(src?.analysis, hist, here, wantReplay ? replay : null), [src, hist, here, replay, wantReplay]);
   // every running trade of this pair is drawn (entry / stop / target), not just the first one
   const analysis = useMemo(() => {
-    if (!live?.analysis) return live?.analysis;
-    if (!here.length) return live.analysis;
-    return { ...live.analysis, trades: here.map((t) => ({
+    const a0 = src?.analysis;
+    if (!a0) return a0;
+    const list = here.map((t) => ({
       ts: t.trigger_ts || Math.floor(new Date(t.created_at).getTime() / 1000), direction: t.direction,
-      entry: t.entry_price, sl: t.stop_loss, tp: t.take_profit, current_sl: t.current_sl, be_moved: t.be_moved, live_r: t.live_r })) };
-  }, [live, here]);
-  const viewKey = `${prefs.symbol}|${tf}|${dataRev}|${prefs.timeMode}`;
+      entry: t.entry_price, sl: t.stop_loss, tp: t.take_profit, current_sl: t.current_sl, be_moved: t.be_moved, live_r: t.live_r }));
+    if (plan) list.push(plan);
+    return list.length ? { ...a0, trades: list } : a0;
+  }, [src, here, plan]);
+  const viewKey = `${sym}|${tf}|${dataRev}|${prefs.timeMode}`;
   const dataKey = `${loadedKey}|${dataRev}|${prefs.timeMode}`;
-  const info = symbolInfo(prefs.symbol);
+  const info = symbolInfo(sym);
   return (
     <div className="relative h-full">
       <Chart candles={candles} dataKey={dataKey} analysis={analysis} own={structure} tf={tf} layers={layers} marks={marks} precision={info.precision}

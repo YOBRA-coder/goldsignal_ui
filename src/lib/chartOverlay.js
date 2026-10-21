@@ -125,7 +125,7 @@ function drawSweeps(ctx, env, sweeps) {
 
 function drawTrendlines(ctx, env, tls, tag) {
   const { x, y, W, tAtX } = env;
-  tls.filter((t) => !t.broken).forEach((t) => {
+  tls.forEach((t) => {
     const tEnd = t.broken && t.broken_ts ? t.broken_ts : tAtX(W);
     const pEnd = t.p2 + t.slope_per_sec * (tEnd - t.ts2);
     const xa = x(t.ts1), ya = y(t.p1), xb = x(tEnd), yb = y(pEnd);
@@ -159,6 +159,81 @@ function drawTF(ctx, env, a, tag, layerOpts = {}) {
   if (layerOpts.pools) drawPools(ctx, env, a.pools || [], layerOpts.pools);
   if (layerOpts.sweeps) drawSweeps(ctx, env, a.sweeps || []);
   if (layerOpts.trend) drawTrendlines(ctx, env, a.trendlines || [], tag);
+}
+
+// Premium / discount of the current dealing range (last swing high -> last swing low), the 50% equilibrium line and
+// strong / weak highs & lows (the swing that protects the trend is "strong", the one price is expected to take is "weak").
+function drawPremiumDiscount(ctx, env, a, tag) {
+  if (!a || a.equilibrium == null || !a.last_high || !a.last_low) return;
+  const { x, y, W } = env;
+  const yh = y(a.last_high.price), yl = y(a.last_low.price), ye = y(a.equilibrium);
+  if (yh == null || yl == null || ye == null) return;
+  const x1 = Math.max(0, x(Math.min(a.last_high.ts, a.last_low.ts)) ?? 0);
+  if (x1 >= W) return;
+  ctx.fillStyle = rgba(COLORS.bear, 0.045); ctx.fillRect(x1, Math.min(yh, ye), W - x1, Math.abs(ye - yh));
+  ctx.fillStyle = rgba(COLORS.bull, 0.045); ctx.fillRect(x1, Math.min(yl, ye), W - x1, Math.abs(yl - ye));
+  hline(ctx, ye, x1, W, COLORS.grey, { width: 1, dash: [8, 5], alpha: 0.7 });
+  if (!env.compact) {
+    label(ctx, `${tag} EQ 50%`, x1 + 6, ye - 7, COLORS.grey, { size: 9.5, bold: true });
+    label(ctx, "PREMIUM", x1 + 6, Math.min(yh, ye) + 9, rgba(COLORS.bear, 0.75), { size: 8.5, bold: true });
+    label(ctx, "DISCOUNT", x1 + 6, Math.max(yl, ye) - 9, rgba(COLORS.bull, 0.75), { size: 8.5, bold: true });
+  }
+  const bullish = a.bias === "bullish", bearish = a.bias === "bearish";
+  [[a.last_high, bullish ? "Weak High" : bearish ? "Strong High" : "High"], [a.last_low, bullish ? "Strong Low" : bearish ? "Weak Low" : "Low"]].forEach(([sw, txt]) => {
+    const py = y(sw.price), px = x(sw.ts);
+    if (py == null || px == null) return;
+    const strong = txt.startsWith("Strong");
+    const col = strong ? COLORS.gold : COLORS.grey;
+    hline(ctx, py, Math.max(0, px), W, col, { width: strong ? 1.6 : 1, dash: strong ? null : [3, 3], alpha: strong ? 0.85 : 0.6 });
+    label(ctx, `${tag} ${txt}`, W - 6, py + (sw.type === "high" ? -8 : 9), col, { align: "right", size: 9, bold: strong });
+  });
+}
+
+// Asia / London session ranges as boxes (high-low of the last run of that session, extended to the right).
+function drawSessionRanges(ctx, env, levels) {
+  const { x, y, W } = env;
+  [["ASI", "Asia range", "#64748b"], ["LON", "London range", "#3b82f6"]].forEach(([k, txt, col]) => {
+    const hi = levels.find((l) => l.key === `${k}H`), lo = levels.find((l) => l.key === `${k}L`);
+    if (!hi || !lo) return;
+    const y1 = y(hi.price), y2 = y(lo.price), x1 = Math.max(0, hi.ts ? x(hi.ts) ?? 0 : 0);
+    if (y1 == null || y2 == null || x1 >= W) return;
+    ctx.fillStyle = rgba(col, 0.06); ctx.fillRect(x1, y1, W - x1, y2 - y1);
+    ctx.save(); ctx.strokeStyle = rgba(col, 0.55); ctx.lineWidth = 1; ctx.setLineDash([4, 3]); ctx.strokeRect(x1 + 0.5, y1 + 0.5, W - x1 - 1, y2 - y1 - 1); ctx.restore();
+    label(ctx, txt, x1 + 6, Math.min(y1, y2) + 9, rgba(col, 0.95), { size: 9, bold: true });
+  });
+}
+
+// Entry-timeframe extras the engine already detects: liquidity sweep before the trigger, volume spike, retest limit entry, breakeven.
+function drawEntryExtras(ctx, env, a, precision) {
+  const e = a.entry;
+  const { x, y, W } = env;
+  if (e?.sweep) {
+    const px = x(e.sweep.ts), py = y(e.sweep.level);
+    if (px != null && py != null) {
+      hline(ctx, py, Math.max(0, x(e.sweep.ts - 12 * (env.barSeconds || 900)) ?? 0), px + 30, COLORS.violet, { width: 1, dash: [2, 3], alpha: 0.9 });
+      ctx.fillStyle = COLORS.violet; ctx.beginPath(); ctx.arc(px, py, 3.5, 0, Math.PI * 2); ctx.fill();
+      label(ctx, "liq. sweep", px + 6, py + (a.trade?.direction === "SELL" ? -9 : 10), COLORS.violet, { size: 9, bold: true });
+    }
+  }
+  if (e?.volume?.spike) {
+    const px = x(e.volume.ts);
+    if (px != null) label(ctx, `VOL ×${Number(e.volume.ratio).toFixed(1)}`, px, 14, COLORS.gold, { align: "center", size: 9, bold: true, bg: "rgba(11,14,20,0.75)" });
+  }
+  if (e?.retest?.price != null) {
+    const py = y(e.retest.price);
+    if (py != null) {
+      hline(ctx, py, 0, W, COLORS.cyan, { width: 1, dash: [6, 4], alpha: 0.8 });
+      label(ctx, `retest entry ${e.retest.price.toFixed(precision)} (${e.retest.reward_r}R)`, 8, py - 7, COLORS.cyan, { size: 9.5, bold: true });
+    }
+  }
+  const be = a.trade?.breakeven_price;
+  if (be != null) {
+    const py = y(be);
+    if (py != null) {
+      hline(ctx, py, 0, W, COLORS.grey, { width: 1, dash: [1, 4], alpha: 0.8 });
+      label(ctx, `move stop to entry here ${be.toFixed(precision)}`, 8, py - 7, COLORS.grey, { size: 9 });
+    }
+  }
 }
 
 function drawLevels(ctx, env, levels, precision) {
@@ -338,6 +413,7 @@ export function drawOverlay(ctx, env) {
   if (layers.news) drawNews(ctx, env);
   if (layers.amd && env.own?.amd) drawAMD(ctx, env, env.own.amd);
   if (a) {
+    if (layers.sessions) drawSessionRanges(ctx, env, a.levels || []);
     if (layers.levels) drawLevels(ctx, env, a.levels || [], precision);
     // Structure of the timeframe being viewed (BOS/CHoCH, swings, OB/FVG, liquidity, trend lines).
     // On 4H / 1H the shared analysis IS that timeframe's structure.
@@ -345,10 +421,11 @@ export function drawOverlay(ctx, env) {
     const tag = (tf || "").toUpperCase();
     if (layers.own && own) {
       drawTF(ctx, env, own, tag, tf === "4h"
-        ? { key: true, events: 5, swings: 8, pools: 3 }
+        ? { key: true, fvg: true, events: 5, swings: 8, pools: 3, sweeps: true, trend: true }
         : { fvg: true, events: 5, swings: 8, pools: 3, sweeps: true, trend: true });
     }
-    if (layers.htf && tf !== "4h") drawTF(ctx, env, a["4h"], "4H", { key: true, events: 4, swings: 6, pools: 3 });
+    if (layers.pd && own) drawPremiumDiscount(ctx, env, own, tag);
+    if (layers.htf && tf !== "4h") drawTF(ctx, env, a["4h"], "4H", { key: true, fvg: true, events: 4, swings: 6, pools: 3 });
     const setupOn = layers.setup && tf !== "1h";
     if (setupOn) drawTF(ctx, env, a["1h"], "1H", { fvg: true, events: 4, swings: 8, pools: 4, sweeps: true, trend: true });
     if (setupOn || (layers.own && tf === "1h")) {
@@ -358,7 +435,7 @@ export function drawOverlay(ctx, env) {
           text: `WATCH ${a.watch_zone.source} · ${a.watch_zone.distance_atr.toFixed(1)} ATR away` });
       }
     }
-    if (layers.trigger) drawTrigger(ctx, env, a, precision);
+    if (layers.trigger) { drawTrigger(ctx, env, a, precision); drawEntryExtras(ctx, env, a, precision); }
   }
   ctx.restore();
 }
