@@ -12,29 +12,52 @@ const TONE = { signal: "gold", waiting_trigger: "blue", waiting_zone: "gray", no
 const ENTRY = ["1m", "5m", "15m", "30m"];
 const PREV = ["forming", "h1_preview", "one_h_preview", "entry_shift_preview", "counter_watch"];
 
-/** Full-screen "log" pop-up: what the engine sees right now for this pair + entry timeframe, and what it expects next.
- *  Read-only (/signals/brief records nothing), refreshed every few seconds while open. */
-export default function BriefPanel({ tf, onClose }) {
+/** Read-only brief for one pair + entry timeframe (/signals/brief records nothing), refreshed every few seconds.
+ *  Shared by the floating log and the full-screen side panel (LOG + SIGNALS tabs). The scalp view is always requested
+ *  here so the panel can show it even when scalp mode is off on the dashboard. */
+export function useBrief(symbol, tf, { scalp = true, every = 8000 } = {}) {
   const { prefs } = useLive();
   const etf = ENTRY.includes(tf) ? tf : prefs.entryTF;
-  const info = symbolInfo(prefs.symbol);
   const [b, setB] = useState(null);
   const [err, setErr] = useState(null);
   const load = useCallback(async (ctl) => {
     try {
-      const { data } = await api.get("/signals/brief", { signal: ctl?.signal, params: { symbol: prefs.symbol, entry_interval: etf,
-        min_agreement: prefs.minAgreement, sessions_only: prefs.sessionsOnly, rr: prefs.rr, scalp: prefs.scalp, sens: prefs.sens } });
+      const { data } = await api.get("/signals/brief", { signal: ctl?.signal, params: { symbol, entry_interval: etf,
+        min_agreement: prefs.minAgreement, sessions_only: prefs.sessionsOnly, rr: prefs.rr, scalp, sens: prefs.sens } });
+      if (ctl?.signal?.aborted) return;
       setB(data); setErr(null);
-    } catch (e) { if (e?.code !== "ERR_CANCELED") setErr(e?.response?.data?.detail || e?.message || "Could not load"); }
-  }, [prefs.symbol, etf, prefs.minAgreement, prefs.sessionsOnly, prefs.rr, prefs.scalp, prefs.sens]);
+    } catch (e) { if (e?.code !== "ERR_CANCELED" && e?.name !== "CanceledError") setErr(e?.response?.data?.detail?.message || e?.response?.data?.detail || e?.message || "Could not load"); }
+  }, [symbol, etf, prefs.minAgreement, prefs.sessionsOnly, prefs.rr, scalp, prefs.sens]);
   useEffect(() => {
-    setB(null);
+    setB(null); setErr(null);
     const ctl = new AbortController();
     load(ctl);
-    const t = setInterval(() => load(ctl), 8000);
+    const t = setInterval(() => load(ctl), every);
     return () => { ctl.abort(); clearInterval(t); };
-  }, [load]);
+  }, [load, every]);
+  return { b, err, etf };
+}
 
+/** Floating "log" card (kept for compatibility; the full-screen chart now uses ChartSidePanel). */
+export default function BriefPanel({ tf, onClose, symbol }) {
+  const { prefs } = useLive();
+  const sym = symbol || prefs.symbol;
+  const info = symbolInfo(sym);
+  const { b, err, etf } = useBrief(sym, tf, { scalp: prefs.scalp });
+  return (
+    <div className="absolute z-[75] left-2 right-2 top-2 md:left-3 md:right-auto md:w-[460px] max-h-[75%] overflow-y-auto rounded-2xl border border-gold/30 bg-bg/95 backdrop-blur shadow-2xl p-3 text-xs">
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <div className="font-bold text-sm">{info.short} <span className="text-gold">{etf}</span> <span className="text-gray-500 font-normal">log</span></div>
+        <button onClick={onClose} aria-label="Close log" className="text-gray-400 hover:text-bear"><XIcon size={16} /></button>
+      </div>
+      <BriefBody b={b} err={err} etf={etf} symbol={sym} />
+    </div>
+  );
+}
+
+/** The log itself: what is happening, what is expected, open trades, last scans. */
+export function BriefBody({ b, err, etf, symbol }) {
+  const info = symbolInfo(symbol);
   const s = b?.signal;
   const sc = b?.scalp_signal;
   const plans = s?.outlook?.plans || [];
@@ -42,11 +65,7 @@ export default function BriefPanel({ tf, onClose }) {
   const bad = (s?.checks || []).filter((c) => c.ok === false);
   const previews = PREV.map((k) => [k, s?.[k]]).filter(([, v]) => v && (v.note || v.detail));
   return (
-    <div className="absolute z-[75] left-2 right-2 top-2 md:left-3 md:right-auto md:w-[460px] max-h-[75%] overflow-y-auto rounded-2xl border border-gold/30 bg-bg/95 backdrop-blur shadow-2xl p-3 text-xs">
-      <div className="flex items-center justify-between gap-2 mb-2">
-        <div className="font-bold text-sm">{info.short} <span className="text-gold">{etf}</span> <span className="text-gray-500 font-normal">log</span></div>
-        <button onClick={onClose} aria-label="Close log" className="text-gray-400 hover:text-bear"><XIcon size={16} /></button>
-      </div>
+    <div className="text-xs">
       {!b && !err && <div className="flex items-center gap-2 text-gray-500"><Spinner /> Reading the market…</div>}
       {err && !b && <div className="text-amber-400">{err}</div>}
       {s && (<>
@@ -59,6 +78,7 @@ export default function BriefPanel({ tf, onClose }) {
           {b.sessions?.label && <Chip tone={b.sessions.open ? "bull" : "amber"}>{b.sessions.label}</Chip>}
         </div>
         <p className="text-gray-200 mt-1.5 leading-snug">{s.headline}</p>
+        {s.entry_check && <div className={cx("mt-1", s.entry_check.ok ? "text-bull" : "text-amber-400")}>Entry: {s.entry_check.note}</div>}
         {bad.length > 0 && (
           <ul className="mt-1.5 space-y-0.5">
             {bad.map((c) => <li key={c.key} className="flex gap-1.5 text-gray-400"><XIcon size={12} className="text-bear mt-0.5 shrink-0" /><span><span className="text-gray-300">{c.label}</span> — {c.detail}</span></li>)}

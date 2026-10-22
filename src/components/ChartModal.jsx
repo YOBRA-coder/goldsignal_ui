@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Check, ExternalLink, Minus, X } from "lucide-react";
+import { ExternalLink, X } from "lucide-react";
 import api from "../api";
 import LiveChart from "./LiveChart";
 import { ChartTypeSwitch, LayerChips, presetFor } from "./ChartPanel";
+import ChartSidePanel from "./ChartSidePanel";
 import { Chip, Segmented } from "./ui";
 import { useLive } from "../context/LiveContext";
 import { SYMBOLS, TIMEFRAMES, symbolInfo } from "../lib/constants";
@@ -45,24 +46,10 @@ function useSymbolHistory(symbol, enabled) {
   return rows;
 }
 
-function Checks({ checks }) {
-  if (!checks?.length) return null;
-  return (
-    <ul className="space-y-1">
-      {checks.map((c) => (
-        <li key={c.key} className="flex gap-1.5 text-[11px] leading-snug">
-          {c.ok === null ? <Minus size={12} className="text-gray-500 shrink-0 mt-0.5" /> : c.ok ? <Check size={12} className="text-bull shrink-0 mt-0.5" /> : <X size={12} className="text-bear shrink-0 mt-0.5" />}
-          <span><span className="text-gray-300">{c.label}</span><span className="text-gray-500"> — {c.detail}</span></span>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
 /** Pop-up with the FULL chart (all timeframes, all overlays) for a pair, opened from any signal, alert, board row or log line.
  *  item = { symbol, tf?, plan?, firedTs?, title?, note?, status?, category? } */
 export default function ChartModal({ item, onClose }) {
-  const { prefs, setPref, live } = useLive();
+  const { prefs, setPref } = useLive();
   const nav = useNavigate();
   const [symbol, setSymbol] = useState(item.symbol);
   const same = symbol === item.symbol;
@@ -75,7 +62,6 @@ export default function ChartModal({ item, onClose }) {
   const hist = useSymbolHistory(symbol, other);
   const info = symbolInfo(symbol);
   const p = info.precision;
-  const sig = other ? peekData?.signal : live?.signal;
   const [catLabel, catTone] = CAT[item.category] || [];
 
   useEffect(() => {
@@ -119,38 +105,24 @@ export default function ChartModal({ item, onClose }) {
           {other && !peekData && !err && <div className="absolute top-2 right-3 text-[11px] text-gray-500">Loading analysis…</div>}
           {err && <div className="absolute top-2 right-3 text-[11px] text-amber-400">{err}</div>}
         </div>
-        <aside className="lg:w-80 xl:w-96 shrink-0 max-h-[38vh] lg:max-h-none overflow-y-auto border-t lg:border-t-0 lg:border-l border-border p-3 space-y-3 text-sm">
-          {same && item.note && <p className="text-xs text-gray-300 leading-snug">{item.note}</p>}
-          {sig && (
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className={cx("text-lg font-black", sig.direction === "BUY" ? "text-bull" : sig.direction === "SELL" ? "text-bear" : "text-gray-300")}>{sig.direction}</span>
-                <Chip tone="gray">{sig.status?.replace(/_/g, " ")}</Chip>
-                <Chip tone="gold">{Math.round(sig.agreement)}% · {sig.grade}</Chip>
-              </div>
-              <p className="text-xs text-gray-400 leading-snug mt-1">{sig.headline}</p>
-              <div className="grid grid-cols-2 gap-x-3 text-xs mt-2">
-                <div className="flex justify-between border-b border-border/60 py-1"><span className="text-gray-500">4H</span><span className="capitalize">{sig.bias_4h}</span></div>
-                <div className="flex justify-between border-b border-border/60 py-1"><span className="text-gray-500">1H</span><span className="capitalize">{sig.bias_1h}</span></div>
-              </div>
+        <aside className="lg:w-[380px] xl:w-[420px] shrink-0 h-[44vh] lg:h-auto flex flex-col min-h-0 border-t lg:border-t-0 lg:border-l border-border text-sm">
+          {((same && (item.note || item.plan))) && (
+            <div className="shrink-0 max-h-[40%] overflow-y-auto p-3 space-y-2 border-b border-border">
+              {item.note && <p className="text-xs text-gray-300 leading-snug">{item.note}</p>}
+              {item.plan && (
+                <div className="rounded-xl border border-border p-2.5">
+                  <div className="text-[10px] uppercase text-gray-500 mb-1">This trade</div>
+                  <div className="grid grid-cols-3 text-center tabular-nums">
+                    <div><div className="text-[10px] text-gray-500">Entry</div><div className="text-gold font-bold">{fmtPrice(item.plan.entry, p)}</div></div>
+                    <div><div className="text-[10px] text-gray-500">Stop</div><div className="text-bear font-bold">{fmtPrice(item.plan.sl, p)}</div></div>
+                    <div><div className="text-[10px] text-gray-500">Target</div><div className="text-bull font-bold">{fmtPrice(item.plan.tp, p)}</div></div>
+                  </div>
+                  {item.firedTs && <div className="text-[11px] text-gray-500 mt-1.5">Fired {fmtDateTime(item.firedTs)} · {fmtAgo(item.firedTs)}</div>}
+                </div>
+              )}
             </div>
           )}
-          {((same && item.plan) || (sig?.entry_price && sig?.stop_loss)) && (() => { const pl = (same && item.plan) || { entry: sig.entry_price, sl: sig.stop_loss, tp: sig.take_profit }; return (
-            <div className="rounded-xl border border-border p-2.5">
-              <div className="text-[10px] uppercase text-gray-500 mb-1">{same && item.plan ? "This trade" : "Trade plan (preview)"}</div>
-              <div className="grid grid-cols-3 text-center tabular-nums">
-                <div><div className="text-[10px] text-gray-500">Entry</div><div className="text-gold font-bold">{fmtPrice(pl.entry, p)}</div></div>
-                <div><div className="text-[10px] text-gray-500">Stop</div><div className="text-bear font-bold">{fmtPrice(pl.sl, p)}</div></div>
-                <div><div className="text-[10px] text-gray-500">Target</div><div className="text-bull font-bold">{fmtPrice(pl.tp, p)}</div></div>
-              </div>
-              {same && item.firedTs && <div className="text-[11px] text-gray-500 mt-1.5">Fired {fmtDateTime(item.firedTs)} · {fmtAgo(item.firedTs)}</div>}
-            </div>); })()}
-          {sig?.checks && (
-            <div>
-              <div className="text-[10px] uppercase text-gray-500 mb-1">Checklist now</div>
-              <Checks checks={sig.checks} />
-            </div>
-          )}
+          <ChartSidePanel symbol={symbol} tf={tf} className="flex-1" />
         </aside>
       </div>
     </div>

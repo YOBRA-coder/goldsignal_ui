@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { Expand, Layers, LayoutGrid, Maximize, Minimize, ScrollText, Square, X } from "lucide-react";
-import BriefPanel from "./BriefPanel";
+import { Expand, Layers, LayoutGrid, Maximize, Minimize, PanelRight, Square, X } from "lucide-react";
+import ChartSidePanel from "./ChartSidePanel";
 import LiveChart from "./LiveChart";
 import LivePrice from "./LivePrice";
 import { Chip, Segmented } from "./ui";
@@ -90,7 +90,12 @@ function Expanded({ tf: tf0, layers: l0, onClose }) {
   const [layers, setLayers] = useState(l0);
   const setTf = (t) => { setTfRaw(t); setLayers(presetFor(t)); };
   const [fs, setFs] = useState(false);
-  const [logOpen, setLogOpen] = useState(false);
+  // the side panel (LOG / NEWS / LEVELS / SIGNALS / VOTE) is open by default on a wide screen, closed on a phone; the choice is remembered
+  const [panelOpen, setPanelOpenRaw] = useState(() => {
+    try { const v = localStorage.getItem("gs_panel_open"); if (v === "1" || v === "0") return v === "1"; } catch { /* ignore */ }
+    return typeof window === "undefined" ? true : window.innerWidth >= 1024;
+  });
+  const setPanelOpen = (v) => { setPanelOpenRaw(v); try { localStorage.setItem("gs_panel_open", v ? "1" : "0"); } catch { /* ignore */ } };
   const [focus, setFocus] = useState(null);
   const [note, setNote] = useState("");
   const pickRange = (days) => { setNote(""); setFocus({ days, nonce: Date.now() }); };
@@ -127,10 +132,10 @@ function Expanded({ tf: tf0, layers: l0, onClose }) {
         <div className="hidden md:block"><LayerChips layers={layers} setLayers={setLayers} tf={tf} /></div>
         <div className="ml-auto flex items-center gap-2">
           <ChartTypeSwitch />
-          <button onClick={() => setLogOpen((v) => !v)} title="Log: what is happening and what is expected" aria-pressed={logOpen}
+          <button onClick={() => setPanelOpen(!panelOpen)} title="Log, news, levels, signals and the market vote for this pair" aria-pressed={panelOpen}
             className={cx("h-9 px-3 rounded-lg border flex items-center gap-1.5 text-xs font-medium",
-              logOpen ? "border-gold/60 bg-gold/10 text-gold" : "border-border bg-panel text-gray-300 hover:text-gold")}>
-            <ScrollText size={15} /> Log
+              panelOpen ? "border-gold/60 bg-gold/10 text-gold" : "border-border bg-panel text-gray-300 hover:text-gold")}>
+            <PanelRight size={15} /> {panelOpen ? "Hide panel" : "Panel"}
           </button>
           {document.documentElement.requestFullscreen && (
             <button onClick={toggleBrowserFs} title="Browser full screen" className="hidden sm:flex w-9 h-9 rounded-lg border border-border bg-panel items-center justify-center text-gray-400 hover:text-gold">
@@ -141,9 +146,14 @@ function Expanded({ tf: tf0, layers: l0, onClose }) {
         </div>
         <div className="md:hidden w-full"><LayerChips layers={layers} setLayers={setLayers} tf={tf} /></div>
       </div>
-      <div className="flex-1 min-h-0 relative">
-        {logOpen && <BriefPanel tf={tf} onClose={() => setLogOpen(false)} />}
-        <LiveChart tf={tf} layers={layers} heightClass="h-full" limit={800} focus={focus} onFocusDone={rangeDone} />
+      <div className="flex-1 min-h-0 flex flex-col lg:flex-row">
+        <div className="flex-1 min-h-[280px] min-w-0 relative">
+          <LiveChart tf={tf} layers={layers} heightClass="h-full" limit={800} focus={focus} onFocusDone={rangeDone} />
+        </div>
+        {panelOpen && (
+          <ChartSidePanel symbol={prefs.symbol} tf={tf} onHide={() => setPanelOpen(false)}
+            className="shrink-0 h-[44vh] lg:h-auto lg:w-[380px] xl:w-[420px] border-t lg:border-t-0 lg:border-l border-border" />
+        )}
       </div>
     </div>
   );
