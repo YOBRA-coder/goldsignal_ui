@@ -9,7 +9,7 @@ export const useLive = () => useContext(LiveCtx);
 
 const DEFAULTS = {
   symbol: "XAUUSD=X", entryTF: "15m", chartTF: "15m", layout: "single", timeMode: "server",
-  minAgreement: 70, sessionsOnly: true, rr: 2, sound: true, notify: false, scalp: false, sens: "normal", showReplay: true, chartType: "candles",
+  minAgreement: 70, sessionsOnly: true, rr: 2, sound: true, toastSecs: 8, notify: false, scalp: false, sens: "normal", showReplay: true, chartType: "candles",
 };
 const POLL_MS = 10000;
 const QUOTE_MS = 6000;
@@ -58,8 +58,8 @@ export function LiveProvider({ children }) {
 
   const pushToast = useCallback((t) => {
     const id = `${Date.now()}-${Math.random()}`;
-    setToasts((x) => [...x.slice(-3), { id, ...t }]);
-    setTimeout(() => setToasts((x) => x.filter((q) => q.id !== id)), t.kind === "info" ? 6000 : 12000);
+    const secs = Number(prefsRef.current.toastSecs);
+    setToasts((x) => [...x.slice(-3), { id, secs: Number.isFinite(secs) ? secs : 8, ...t }]);
   }, []);
   const dismissToast = useCallback((id) => setToasts((x) => x.filter((q) => q.id !== id)), []);
 

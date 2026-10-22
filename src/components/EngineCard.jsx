@@ -4,6 +4,7 @@ import api from "../api";
 import { Card, Segmented } from "./ui";
 import { useLive } from "../context/LiveContext";
 
+export const SMC_OPTS = [{ value: "off", label: "Off" }, { value: "confirm", label: "Confirm" }, { value: "strict", label: "Strict" }];
 export const AMD_OPTS = [{ value: "off", label: "Off" }, { value: "confirm", label: "Confirm" }, { value: "require", label: "Required" }];
 export const QUALITY_OPTS = [{ value: "standard", label: "Standard" }, { value: "selective", label: "Selective" }];
 
@@ -26,6 +27,11 @@ export default function EngineCard({ reloadKey = 0 }) {
           <div className="text-sm text-gray-200 mb-1">AMD (accumulation → manipulation → distribution)</div>
           <Segmented size="sm" value={e.amd} onChange={(v) => save({ amd: v })} options={AMD_OPTS} />
           <p className="mt-1 leading-snug"><b>Confirm</b>: a range raid that matches the trade counts as an extra confirmation; a raid pointing the other way needs one more. <b>Required</b>: only trade when the raid → displacement agrees (fewest, cleanest trades).</p>
+        </div>
+        <div>
+          <div className="text-sm text-gray-200 mb-1">Smart-money filters (breaker · inducement · zone quality)</div>
+          <Segmented size="sm" value={e.smc || "confirm"} onChange={(v) => save({ smc: v })} options={SMC_OPTS} />
+          <p className="mt-1 leading-snug"><b>Confirm</b>: breaker blocks count as zones, a breaker needs one extra confirmation, and a climax candle already stretched far from the zone is skipped (no chasing). <b>Strict</b>: also needs inducement (a small raid right before the tap), a quality zone, and scalps only inside London / New York kill zones. Fewer trades, fewer low-grade losers. Compare all three under Backtest.</p>
         </div>
         <div>
           <div className="text-sm text-gray-200 mb-1">Quality</div>

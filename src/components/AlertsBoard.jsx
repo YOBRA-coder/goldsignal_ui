@@ -1,4 +1,6 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import api from "../api";
+import { Checks, Previews } from "./ScanLogPanel";
 import { Bell, ChevronDown, Maximize2, Radar, RefreshCw, ScrollText } from "lucide-react";
 import { Card, Chip, Empty } from "./ui";
 import PreviewLine from "./PreviewLine";
@@ -117,10 +119,56 @@ export function HappeningNow({ board, entryTF, minAgreement }) {
   );
 }
 
+/** Everything the engine knew when a pair changed state: levels, zone, bias, smart-money facts, every check and preview. */
+function ActivityDetail({ r }) {
+  const [d, setD] = useState(null);
+  const [err, setErr] = useState(false);
+  useEffect(() => {
+    let dead = false;
+    if (!r.id) return undefined;
+    api.get(`/signals/activity/${r.id}`).then((x) => { if (!dead) setD(x.data); }).catch(() => { if (!dead) setErr(true); });
+    return () => { dead = true; };
+  }, [r.id]);
+  const s = (d?.snapshot || r.snapshot) || {};
+  const z = s.zone;
+  const smc = s.smc;
+  const px = (v) => (v == null ? "-" : fmtPrice(v, r.symbol));
+  const facts = [
+    ["Headline", d?.headline || r.headline],
+    ["4H / 1H bias", `${r.bias_4h || "-"} / ${r.bias_1h || "-"}`],
+    ["Price then", s.price != null ? px(s.price) : null],
+    ["Entry / SL / TP", s.entry != null ? `${px(s.entry)} / ${px(s.sl)} / ${px(s.tp)}${s.rr ? ` (${s.rr}R)` : ""}` : null],
+    ["Zone", z ? `${z.tf || ""} ${z.source || ""} ${z.type || ""} ${px(z.bottom)}–${px(z.top)}${z.distance_atr != null ? ` · ${Number(z.distance_atr).toFixed(1)} ATR away` : ""}` : null],
+    ["Zone tapped / trigger", `${s.zone_tapped ? "tapped" : "not tapped"} · ${s.trigger_ready ? "trigger ready" : "no trigger yet"}${s.pattern ? ` (${s.pattern})` : ""}`],
+    ["Candle forming", s.forming],
+    ["Session", s.session],
+    ["AMD phase", s.amd],
+    ["Grade / type", [r.grade, s.trade_type].filter(Boolean).join(" · ") || null],
+  ].filter(([, v]) => v);
+  return (
+    <div className="pl-5 pr-1 pb-2 text-xs">
+      <dl className="grid grid-cols-[120px_1fr] gap-x-3 gap-y-1">
+        {facts.map(([k, v]) => (<React.Fragment key={k}><dt className="text-gray-500">{k}</dt><dd className="text-gray-300 break-words">{v}</dd></React.Fragment>))}
+      </dl>
+      {smc && (
+        <div className="flex flex-wrap gap-1 mt-2">
+          {smc.idm && <Chip tone="gold">IDM swept</Chip>}{smc.breaker && <Chip tone="blue">Breaker</Chip>}
+          {smc.htf && <Chip tone="bull">Inside 4H zone</Chip>}{smc.disp && <Chip tone="bull">Displacement</Chip>}
+          {smc.fresh && <Chip tone="bull">Fresh zone</Chip>}{smc.kz && <Chip tone="gray">Kill zone</Chip>}
+        </div>
+      )}
+      {!d && !err && <div className="text-gray-500 mt-2">Loading the full breakdown…</div>}
+      {err && <div className="text-gray-500 mt-2">The full breakdown is no longer stored for this row.</div>}
+      {d && <div className="mt-2"><div className="text-[10px] uppercase text-gray-500">Every check</div><Checks checks={d.checks} /><Previews previews={d.previews} /></div>}
+    </div>
+  );
+}
+
 const CLEAR_KEY = "gs_log_cleared";
 export function ActivityLog({ rows, entryTF, limit = 60 }) {
   const { openChart } = useLive();
   const [clearedAt, setClearedAt] = useState(() => { try { return +localStorage.getItem(CLEAR_KEY) || 0; } catch { return 0; } });
+  const [open, setOpen] = useState(null);
   const list = rows.filter((r) => r.ts > clearedAt).slice(0, limit);
   const clear = () => { const t = Math.floor(Date.now() / 1000); setClearedAt(t); try { localStorage.setItem(CLEAR_KEY, String(t)); } catch { /* ignore */ } };
   return (
@@ -132,18 +180,26 @@ export function ActivityLog({ rows, entryTF, limit = 60 }) {
             const short = symbolInfo(r.symbol).label.includes("/") ? symbolInfo(r.symbol).label.replace("/", "") : symbolInfo(r.symbol).short;
             return (
               <li key={`${r.symbol}-${r.ts}-${i}`}>
-                <button onClick={() => openChart({ symbol: r.symbol, tf: r.entry_interval || entryTF, category: r.to, title: r.status?.replace(/_/g, " "), note: r.headline,
-                    plan: r.to === "signal" && r.snapshot?.entry != null ? { ts: r.ts, direction: r.direction, entry: r.snapshot.entry, sl: r.snapshot.sl, tp: r.snapshot.tp } : undefined })}
-                  className="w-full flex items-center gap-2 py-1.5 text-left hover:bg-white/[0.03] rounded-lg px-1 -mx-1" title="Open the full chart">
-                  <i className={cx("w-2 h-2 rounded-full shrink-0", to.dot)} />
-                  <span className="text-xs text-gray-200 min-w-0 flex-1 truncate">
-                    <b>{short}</b> <span className="text-gray-500">{from.label.toLowerCase()} → </span>
-                    <span className={cx(r.to === "signal" && "text-bull font-semibold")}>{to.label.toLowerCase()}</span>
-                    {r.direction && r.to !== "aside" && <span className={r.direction === "BUY" ? " text-bull" : " text-bear"}> {r.direction}</span>}
-                    <span className="text-gray-500"> ({r.agreement != null ? `${Math.round(r.agreement * 10) / 10}%, ` : ""}{r.entry_interval})</span>
-                  </span>
-                  <span className="text-[11px] text-gray-500 shrink-0">{fmtAgo(r.ts)}</span>
-                </button>
+                <div className="flex items-center gap-1">
+                  <button onClick={() => setOpen(open === r.ts + r.symbol ? null : r.ts + r.symbol)}
+                    className="flex-1 min-w-0 flex items-center gap-2 py-1.5 text-left hover:bg-white/[0.03] rounded-lg px-1 -mx-1" title="Show every detail">
+                    <i className={cx("w-2 h-2 rounded-full shrink-0", to.dot)} />
+                    <span className={cx("text-xs text-gray-200 min-w-0 flex-1", open === r.ts + r.symbol ? "" : "truncate")}>
+                      <b>{short}</b> <span className="text-gray-500">{from.label.toLowerCase()} → </span>
+                      <span className={cx(r.to === "signal" && "text-bull font-semibold")}>{to.label.toLowerCase()}</span>
+                      {r.direction && r.to !== "aside" && <span className={r.direction === "BUY" ? " text-bull" : " text-bear"}> {r.direction}</span>}
+                      <span className="text-gray-500"> ({r.agreement != null ? `${Math.round(r.agreement * 10) / 10}%, ` : ""}{r.entry_interval})</span>
+                    </span>
+                    <span className="text-[11px] text-gray-500 shrink-0">{fmtAgo(r.ts)}</span>
+                    <ChevronDown size={13} className={cx("text-gray-500 shrink-0 transition-transform", open === r.ts + r.symbol && "rotate-180")} />
+                  </button>
+                  <button aria-label="Open chart" title="Open the full chart" className="p-1.5 text-gray-500 hover:text-gold shrink-0"
+                    onClick={() => openChart({ symbol: r.symbol, tf: r.entry_interval || entryTF, category: r.to, title: r.status?.replace(/_/g, " "), note: r.headline,
+                      plan: r.to === "signal" && r.snapshot?.entry != null ? { ts: r.ts, direction: r.direction, entry: r.snapshot.entry, sl: r.snapshot.sl, tp: r.snapshot.tp } : undefined })}>
+                    <Maximize2 size={13} />
+                  </button>
+                </div>
+                {open === r.ts + r.symbol && <ActivityDetail r={r} />}
               </li>
             );
           })}

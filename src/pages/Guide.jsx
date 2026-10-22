@@ -27,6 +27,8 @@ const SWATCH = {
   nearmiss: <Sw><circle cx="32" cy="13" r="5" fill={C.amber} /></Sw>,
   zonehit: <Sw><circle cx="32" cy="13" r="7" fill="none" stroke={C.gold} strokeWidth="1.5" /></Sw>,
   minibos: <Sw><line x1="4" x2="60" y1="13" y2="13" stroke={C.cyan} strokeWidth="1.6" /></Sw>,
+  breaker: <Sw><rect x="6" y="6" width="52" height="14" fill={C.cyan} fillOpacity=".12" stroke={C.cyan} strokeDasharray="4 3" /></Sw>,
+  idm: <Sw><line x1="4" x2="60" y1="13" y2="13" stroke={C.amber} strokeDasharray="1 3" /><circle cx="44" cy="13" r="3" fill={C.amber} /></Sw>,
   retest: <Sw><line x1="4" x2="60" y1="13" y2="13" stroke={C.cyan} strokeDasharray="6 4" /></Sw>,
 };
 
@@ -35,6 +37,8 @@ const LEGEND = [
   ["ob_bear", "Supply / bearish order block (red box)", "The last up-candle before a strong move down. SELL setups are looked for here."],
   ["fvg_bull", "Bullish FVG — fair value gap (blue dashed)", "A gap left by a fast move: price tends to come back to fill it. Acts as support."],
   ["fvg_bear", "Bearish FVG (amber dashed)", "The same, pushing down: acts as resistance."],
+  ["breaker", "Breaker block (cyan / violet dashed box)", "An order block that FAILED: price broke straight through it, so it flips role. A broken demand zone becomes resistance (violet), a broken supply zone becomes support (cyan). Often a sharper entry than a normal order block; the engine asks one extra confirmation for it."],
+  ["idm", "IDM — inducement (amber dotted line + dot)", "A small internal high/low that retail traders trust as support/resistance. Smart money raids it first, then drives the real move. A fresh IDM sweep just before the zone tap is a strong sign the trap is done. Required in Strict mode."],
   ["bos", "BOS — break of structure (solid line)", "Price closed beyond the last swing in the trend direction: the trend continues. Green = up, red = down."],
   ["choch", "CHoCH — change of character (amber dashed line)", "Price closed beyond the last swing AGAINST the trend: the first sign the trend may be turning. Bias flips on the next confirmation."],
   ["liq", "Liquidity pools — EQH / EQL / BSL / SSL (violet dots)", "Equal highs/lows and obvious swing highs/lows where stop-losses sit. Price is drawn to them and often reverses after taking them."],
@@ -130,7 +134,7 @@ export default function Guide({ standalone = false }) {
           {STEPS.map(([t, d]) => <div key={t} className="rounded-xl border border-border bg-panel p-3"><div className="text-sm font-semibold text-gold">{t}</div><div className="text-xs text-gray-400 mt-1 leading-snug">{d}</div></div>)}
         </div>
         <P><b>Agreement %</b> is the weighted share of checks that pass. <b>Grade</b>: A+ ≥ 85%, A ≥ 70%, B ≥ 55%, C below. A signal needs every mandatory gate <i>and</i> the minimum agreement (Profile → Strategy settings, default 70%). Higher minimum = fewer, cleaner signals.</P>
-        <P><b>Mandatory gates include:</b> London / New York session, stop not too wide, enough room to the next wall (≥ 1.5R), spread small next to the stop, market not choppy, no high-impact news, not over-stretched. If one fails the pair shows SETUP with the reason.</P>
+        <P><b>Mandatory gates include:</b> London / New York session, stop not too wide, enough room to the next wall (≥ 1.5R), spread small next to the stop, market not choppy, no high-impact news, not over-stretched. If one fails the pair shows SETUP with the reason. Smart-money filters add: no chasing a climax candle already far from the zone, and (Strict mode) a quality zone, an inducement sweep and kill-zone timing for scalps.</P>
 
         <H id="status">Reading pair status</H>
         <div className="space-y-2">

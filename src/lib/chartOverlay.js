@@ -41,6 +41,7 @@ function hline(ctx, y, x1, x2, color, { width = 1, dash = null, alpha = 1 } = {}
 }
 
 function zoneColors(z) {
+  if (z.source === "BRK") return z.type === "demand" ? COLORS.cyan : COLORS.violet;
   if (z.source === "FVG") return z.type === "demand" ? COLORS.blue : COLORS.amber;
   return z.type === "demand" ? COLORS.bull : COLORS.bear;
 }
@@ -59,11 +60,11 @@ function drawZone(ctx, env, z, tag, opts = {}) {
   ctx.save();
   ctx.strokeStyle = rgba(col, opts.stroke ?? (fresh ? 0.85 : 0.5));
   ctx.lineWidth = opts.width ?? 1;
-  ctx.setLineDash(z.source === "FVG" || !fresh ? [4, 3] : []);
+  ctx.setLineDash(z.source === "FVG" || z.source === "BRK" || !fresh ? [4, 3] : []);
   ctx.strokeRect(x1 + 0.5, y1 + 0.5, x2 - x1 - 1, y2 - y1 - 1);
   ctx.restore();
   if (!env.compact || opts.forceLabel) {
-    const kind = z.source === "FVG" ? "FVG" : z.source === "OB" ? "OB" : "zone";
+    const kind = z.source === "FVG" ? "FVG" : z.source === "BRK" ? "breaker" : z.source === "OB" ? "OB" : "zone";
     const side = z.type === "demand" ? "demand" : "supply";
     const txt = opts.text || `${tag} ${side} ${kind}${fresh ? " ✦" : ""}`;
     label(ctx, txt, Math.max(6, x1 + 4), Math.min(y1, y2) + 8, rgba(col, 0.95), { size: 9.5 });
@@ -148,6 +149,7 @@ function drawTF(ctx, env, a, tag, layerOpts = {}) {
   if (!a) return;
   (a.zones || []).forEach((z) => drawZone(ctx, env, z, tag));
   if (layerOpts.fvg) (a.fvgs || []).forEach((z) => drawZone(ctx, env, z, tag));
+  (a.breakers || []).forEach((z) => drawZone(ctx, env, z, tag));
   if (layerOpts.key && a.key_zones) {
     [a.key_zones.supply_above, a.key_zones.demand_below].forEach((z, i) => {
       if (z) drawZone(ctx, env, z, tag, { width: 2, fill: 0.05, stroke: 1, forceLabel: true,
@@ -213,6 +215,14 @@ function drawEntryExtras(ctx, env, a, precision) {
       hline(ctx, py, Math.max(0, x(e.sweep.ts - 12 * (env.barSeconds || 900)) ?? 0), px + 30, COLORS.violet, { width: 1, dash: [2, 3], alpha: 0.9 });
       ctx.fillStyle = COLORS.violet; ctx.beginPath(); ctx.arc(px, py, 3.5, 0, Math.PI * 2); ctx.fill();
       label(ctx, "liq. sweep", px + 6, py + (a.trade?.direction === "SELL" ? -9 : 10), COLORS.violet, { size: 9, bold: true });
+    }
+  }
+  if (e?.idm?.level != null) {
+    const px = x(e.idm.sweep_ts ?? e.idm.ts), py = y(e.idm.level);
+    if (px != null && py != null) {
+      hline(ctx, py, Math.max(0, x(e.idm.ts) ?? 0), px + 30, COLORS.amber, { width: 1, dash: [1, 3], alpha: 0.95 });
+      ctx.fillStyle = COLORS.amber; ctx.beginPath(); ctx.arc(px, py, 3, 0, Math.PI * 2); ctx.fill();
+      label(ctx, "IDM", px + 6, py + (a.trade?.direction === "SELL" ? -9 : 10), COLORS.amber, { size: 9, bold: true });
     }
   }
   if (e?.volume?.spike) {

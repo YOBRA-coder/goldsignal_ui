@@ -84,6 +84,14 @@ export default function Profile() {
         <InstallCard />
         <Card title="Alerts" icon={Bell}>
           <Toggle on={prefs.sound} onChange={(v) => setPref("sound", v)} label="Sound alerts" hint="Different tones for a new signal, a take-profit win and a stop-loss loss" />
+          <label className="flex items-center justify-between gap-3 py-2">
+            <span><span className="block text-sm text-gray-200">Pop-up notice stays for</span>
+              <span className="block text-xs text-gray-500">Then it hides by itself (hover to pause). Alerts always stay in the bell.</span></span>
+            <select value={prefs.toastSecs} onChange={(e) => setPref("toastSecs", Number(e.target.value))}
+              className="bg-panel2 border border-border rounded-lg px-2 py-1 text-sm text-gray-100">
+              {[[3, "3 s"], [5, "5 s"], [8, "8 s"], [15, "15 s"], [30, "30 s"], [0, "until I close it"]].map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </select>
+          </label>
           <div className="flex items-center justify-between gap-3 py-2">
             <span><span className="block text-sm text-gray-200">Desktop / phone notifications</span>
               <span className="block text-xs text-gray-500">Status: {perm === "granted" && prefs.notify ? "on" : perm === "denied" ? "blocked in browser" : "off"}</span></span>

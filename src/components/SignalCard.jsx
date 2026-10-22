@@ -95,6 +95,20 @@ export default function SignalCard() {
         </div>
       )}
 
+      {(buy || sell) && s.smc && (
+        <div className="mt-3">
+          <div className="text-[10px] uppercase text-gray-500 mb-1">Smart-money quality {s.smc.score != null ? `${s.smc.score}` : ""}</div>
+          <div className="flex flex-wrap gap-1">
+            {s.smc.idm && <Chip tone="gold">IDM swept</Chip>}
+            {s.smc.breaker && <Chip tone="blue">Breaker block</Chip>}
+            {s.smc.htf && <Chip tone="bull">Inside 4H zone</Chip>}
+            {s.smc.disp && <Chip tone="bull">Displacement</Chip>}
+            {s.smc.fresh && <Chip tone="bull">Fresh zone</Chip>}
+            {s.smc.kz && <Chip tone="gray">Kill zone</Chip>}
+          </div>
+        </div>
+      )}
+
       {(buy || sell) && s.confirmations?.length > 0 && (
         <div className="mt-3">
           <div className="text-[10px] uppercase text-gray-500 mb-1">Confirmations {s.confirm_count}/{s.confirm_needed} needed</div>

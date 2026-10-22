@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { Newspaper, AlertTriangle, BarChart3, Bell, BookOpen, CircleUser, FlaskConical,
   LayoutDashboard, LineChart, ListChecks, LogOut, MoreHorizontal, RefreshCw, X } from "lucide-react";
@@ -29,25 +29,39 @@ const NAV = [
 const MOBILE_MAIN = NAV.slice(0, 4);
 const MOBILE_MORE = NAV.slice(4);
 
+function ToastItem({ t }) {
+  const { dismissToast, openChart, prefs } = useLive();
+  const k = kindStyle[t.kind] || kindStyle.info;
+  const Icon = k.icon;
+  const [paused, setPaused] = useState(false);
+  const left = useRef((t.secs || 0) * 1000);
+  useEffect(() => {
+    if (!t.secs || paused) return undefined;
+    const start = Date.now(), rem = left.current;
+    const h = setTimeout(() => dismissToast(t.id), rem);
+    return () => { clearTimeout(h); left.current = Math.max(0, rem - (Date.now() - start)); };
+  }, [paused, t.id, t.secs, dismissToast]);
+  return (
+    <div onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}
+      onClick={() => { dismissToast(t.id); if (t.symbol) openChart({ symbol: t.symbol, tf: prefs.entryTF, title: t.title, note: t.message }); }}
+      className={cx("pointer-events-auto cursor-pointer relative overflow-hidden rounded-xl border backdrop-blur bg-panel/95 shadow-2xl p-3 flex gap-3 animate-[slidein_.25s_ease-out]", k.cls)}>
+      <Icon size={22} className="shrink-0 mt-0.5" />
+      <div className="min-w-0">
+        <div className="font-bold text-sm text-gray-100">{t.title}</div>
+        <div className="text-xs text-gray-300 mt-0.5 break-words">{t.message}</div>
+      </div>
+      <button aria-label="Dismiss" onClick={(e) => { e.stopPropagation(); dismissToast(t.id); }} className="ml-auto shrink-0 self-start text-gray-500 hover:text-gray-200"><X size={14} /></button>
+      {t.secs > 0 && <i className="absolute left-0 bottom-0 h-0.5 bg-current opacity-60"
+        style={{ width: "100%", transformOrigin: "left", animation: `toastbar ${t.secs}s linear forwards`, animationPlayState: paused ? "paused" : "running" }} />}
+    </div>
+  );
+}
+
 function Toasts() {
-  const { toasts, dismissToast, openChart, prefs } = useLive();
+  const { toasts } = useLive();
   return (
     <div className="fixed z-[60] top-3 right-3 left-3 sm:left-auto sm:w-96 space-y-2 pointer-events-none">
-      {toasts.map((t) => {
-        const k = kindStyle[t.kind] || kindStyle.info;
-        const Icon = k.icon;
-        return (
-          <div key={t.id} onClick={() => { dismissToast(t.id); if (t.symbol) openChart({ symbol: t.symbol, tf: prefs.entryTF, title: t.title, note: t.message }); }}
-            className={cx("pointer-events-auto cursor-pointer rounded-xl border backdrop-blur bg-panel/95 shadow-2xl p-3 flex gap-3 animate-[slidein_.25s_ease-out]", k.cls)}>
-            <Icon size={22} className="shrink-0 mt-0.5" />
-            <div className="min-w-0">
-              <div className="font-bold text-sm text-gray-100">{t.title}</div>
-              <div className="text-xs text-gray-300 mt-0.5 break-words">{t.message}</div>
-            </div>
-            <X size={14} className="ml-auto shrink-0 text-gray-500" />
-          </div>
-        );
-      })}
+      {toasts.map((t) => <ToastItem key={t.id} t={t} />)}
     </div>
   );
 }

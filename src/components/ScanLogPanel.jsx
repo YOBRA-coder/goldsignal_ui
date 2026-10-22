@@ -11,7 +11,7 @@ const STATUS_TONE = {
   market_closed: "gray",
 };
 
-function Checks({ checks }) {
+export function Checks({ checks }) {
   if (!checks?.length) return <div className="text-xs text-gray-500 py-1.5">No check breakdown stored for this row.</div>;
   return (
     <ul className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1.5 py-1.5">
@@ -26,7 +26,7 @@ function Checks({ checks }) {
   );
 }
 
-function Previews({ previews }) {
+export function Previews({ previews }) {
   const entries = Object.entries(previews || {}).filter(([k, v]) => v && k !== "highlights" && k !== "snapshot");
   const highlights = previews?.highlights || [];
   if (!entries.length && !highlights.length) return null;
