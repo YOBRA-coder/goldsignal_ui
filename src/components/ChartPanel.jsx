@@ -7,6 +7,7 @@ import { Chip, Segmented } from "./ui";
 import { useLive } from "../context/LiveContext";
 import { TIMEFRAMES, SESSION_LABELS, SESSION_COLORS, symbolInfo } from "../lib/constants";
 import { biasColor, cx } from "../lib/format";
+import { stateOf } from "../lib/brain";
 
 const LAYER_DEFS = [
   { key: "own", label: "This TF", hint: "Structure of the timeframe you are viewing: BOS/CHoCH, swings, OB/FVG, liquidity, trend lines" },
@@ -83,6 +84,17 @@ function ExpandBtn({ onClick }) {
   );
 }
 
+function BrainChip() {
+  const { live } = useLive();
+  const b = live?.signal?.brain;
+  if (!b) return null;
+  const s = b.sides[b.lead], st = stateOf(s);
+  return (
+    <span className={cx("inline-flex items-center gap-1.5 text-[10px] font-bold px-2 py-1 rounded-full border", st.box, st.text, (s.state === "ready" || s.state === "fire") && (s.counter ? "blink-counter" : st.blink))}
+      title={s.next || ""}>{s.direction} {s.pct}% · {st.short}</span>
+  );
+}
+
 /** Full-viewport chart with its own timeframe + layer controls. Esc closes. */
 function Expanded({ tf: tf0, layers: l0, onClose }) {
   const { prefs } = useLive();
@@ -125,6 +137,7 @@ function Expanded({ tf: tf0, layers: l0, onClose }) {
         <div className="flex items-center gap-2">
           <span className="font-bold text-sm">{info.short}</span>
           <LivePrice />
+          <BrainChip />
         </div>
         <Segmented size="sm" value={tf} onChange={(t) => { setTf(t); setFocus(null); setNote(""); }} options={TIMEFRAMES} />
         <Segmented size="sm" value={focus?.days} onChange={pickRange} options={RANGES} />

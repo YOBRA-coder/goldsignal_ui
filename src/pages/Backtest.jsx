@@ -161,6 +161,28 @@ function Result({ r }) {
   );
 }
 
+/** Start a background backtest job and poll it until it finishes. A long run (a year of 5m candles, or the 15 runs of
+ *  "compare") takes minutes - far past the 60 s request limit - so it no longer holds one request open. */
+async function runJob(kind, body, onProgress) {
+  const { data: { job_id } } = await api.post(`/backtest/${kind}/start`, body);
+  const t0 = Date.now();
+  for (;;) {
+    await new Promise((r) => setTimeout(r, 2000));
+    let j;
+    try { ({ data: j } = await api.get(`/backtest/job/${job_id}`)); }
+    catch (e) {
+      if (e?.response?.status === 404 || e?.response?.status === 401) throw e;          // gone / signed out: stop
+      if (Date.now() - t0 > 30 * 60 * 1000) throw e;
+      continue;                                                                          // a hiccup while the server is busy: keep polling
+    }
+    onProgress?.(j);
+    if (j.status === "done") return j.result;
+    if (j.status === "error") throw new Error(j.error || "The backtest failed");
+    if (Date.now() - t0 > 30 * 60 * 1000) throw new Error("The backtest is taking over 30 minutes - try a shorter period.");
+  }
+}
+const progText = (j) => (j?.progress ? `${j.progress.label || "Working"}${j.progress.total > 1 ? ` (${Math.min(j.progress.done + 1, j.progress.total)} of ${j.progress.total})` : ""} · ${j.elapsed ?? 0}s` : "");
+
 export default function Backtest() {
   const { prefs, setPref } = useLive();
   const [f, setF] = useState({ symbol: prefs.symbol, entry_interval: prefs.entryTF, risk_reward: prefs.rr, min_agreement: prefs.minAgreement, sessions_only: prefs.sessionsOnly, style: prefs.scalp ? "scalp" : "swing", sens: prefs.sens || "normal", realistic_fill: true, period: "59d", news: "app" });
@@ -170,6 +192,7 @@ export default function Backtest() {
   const [err, setErr] = useState(null);
   const [cmp, setCmp] = useState(null);
   const [cbusy, setCbusy] = useState(false);
+  const [prog, setProg] = useState("");
   const [applied, setApplied] = useState(0);
 
   const withParams = (r) => ({ ...r, params: { rr: r.stats?.params?.risk_reward } });
@@ -180,16 +203,16 @@ export default function Backtest() {
   async function run() {
     setBusy(true); setErr(null);
     try {
-      const { data } = await api.post("/backtest/run", { ...f, news: f.news === "app" ? null : f.news });
+      const data = await runJob("run", { ...f, news: f.news === "app" ? null : f.news }, (j) => setProg(progText(j)));
       setRes(withParams(data));
       setRuns((x) => [data, ...x]);
-    } catch (e) { setErr(errText(e)); } finally { setBusy(false); }
+    } catch (e) { setErr(errText(e)); } finally { setBusy(false); setProg(""); }
   }
 
   async function compare() {
     setCbusy(true); setErr(null); setCmp(null);
-    try { const { data } = await api.post("/backtest/compare", { ...f, news: f.news === "app" ? null : f.news }); setCmp(data); }
-    catch (e) { setErr(errText(e)); } finally { setCbusy(false); }
+    try { setCmp(await runJob("compare", { ...f, news: f.news === "app" ? null : f.news }, (j) => setProg(progText(j)))); }
+    catch (e) { setErr(errText(e)); } finally { setCbusy(false); setProg(""); }
   }
   async function useRow(r) {
     await api.put("/engine/settings", { amd: r.engine.amd_mode, quality: r.engine.quality, daily_stop: r.engine.daily_stop });
@@ -215,11 +238,11 @@ export default function Backtest() {
             <input type="range" min="40" max="95" step="5" value={f.min_agreement} onChange={(e) => setF({ ...f, min_agreement: +e.target.value })} className="mt-3 w-full" />
           </label>
           <button onClick={run} disabled={busy} className="h-10 rounded-xl bg-gold text-black font-bold flex items-center justify-center gap-2 disabled:opacity-60">
-            {busy ? <Spinner className="!border-black/30 !border-t-black" /> : <Play size={16} />} {busy ? "Running…" : "Run backtest"}
+            {busy ? <Spinner className="!border-black/30 !border-t-black" /> : <Play size={16} />} {busy ? (prog || "Running…") : "Run backtest"}
           </button>
           <button onClick={compare} disabled={cbusy || busy} title="Same data, six engine settings side by side"
             className="h-10 rounded-xl border border-gold/50 text-gold font-semibold flex items-center justify-center gap-2 disabled:opacity-60 xl:col-start-5">
-            {cbusy ? <Spinner /> : <GitCompare size={16} />} {cbusy ? "Comparing… (6 runs)" : "Compare settings"}
+            {cbusy ? <Spinner /> : <GitCompare size={16} />} {cbusy ? (prog || "Comparing… (15 runs)") : "Compare settings"}
           </button>
         </div>
         <div className="max-w-sm mt-1"><Toggle on={f.style === "scalp"} onChange={(v) => setF({ ...f, style: v ? "scalp" : "swing" })} label="Scalp mode (1H-led, short-term)" hint="Off = swing: 4H and 1H must agree" /></div>

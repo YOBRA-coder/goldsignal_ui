@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Check, Minus, ShieldAlert, X } from "lucide-react";
 import api from "../api";
 import { BriefBody, useBrief } from "./BriefPanel";
+import BrainPanel from "./BrainPanel";
 import { EventRow } from "./NewsPanel";
 import { Plan } from "./Outlook";
 import { Chip, Spinner } from "./ui";
@@ -9,13 +10,13 @@ import { useLive } from "../context/LiveContext";
 import { symbolInfo } from "../lib/constants";
 import { cx, errText, fmtAgo, fmtDateTime, fmtPrice, fmtTime } from "../lib/format";
 
-const TABS = [["log", "LOG"], ["news", "NEWS"], ["levels", "LEVELS"], ["signals", "SIGNALS"], ["vote", "VOTE"]];
+const TABS = [["brain", "BRAIN"], ["log", "LOG"], ["news", "NEWS"], ["levels", "LEVELS"], ["signals", "SIGNALS"], ["vote", "VOTE"]];
 const TAB_KEY = "gs_panel_tab";
 // the market read weights the timeframes like this (see analyst.TF_WEIGHT) - shown so the vote can be checked by hand
 const TF_WEIGHT = { "5m": 7, "15m": 10, "30m": 10, "1h": 25, "4h": 30, "1d": 18 };
 const TF_LABEL = { "5m": "5m", "15m": "15m", "30m": "30m", "1h": "1H", "4h": "4H", "1d": "1D" };
 
-const readTab = () => { try { const t = localStorage.getItem(TAB_KEY); return TABS.some(([k]) => k === t) ? t : "log"; } catch { return "log"; } };
+const readTab = () => { try { const t = localStorage.getItem(TAB_KEY); return TABS.some(([k]) => k === t) ? t : "brain"; } catch { return "brain"; } };
 
 /** Poll one endpoint. Data from a previous pair / timeframe is dropped the moment the key changes, and a request that
  *  is still running when the key changes is cancelled (same rule as the chart: no stale data under a new view). */
@@ -289,7 +290,7 @@ export default function ChartSidePanel({ symbol, tf, onHide, className = "" }) {
             <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
               className={cx("px-3 py-2.5 text-[11px] font-bold tracking-wider whitespace-nowrap border-b-2 -mb-px transition-colors",
                 tab === k ? "border-gold text-gold" : "border-transparent text-gray-500 hover:text-gray-300")}>
-              {label}{k === "news" && blackout ? <span className="inline-block w-1.5 h-1.5 rounded-full bg-bear ml-1 align-middle" /> : null}
+              {k === "brain" && b?.signal?.brain && (b.signal.brain.sides[b.signal.brain.lead].state === "ready" || b.signal.brain.sides[b.signal.brain.lead].state === "fire") ? <span className="inline-block w-1.5 h-1.5 rounded-full bg-bull mr-1 align-middle blink-text" /> : null}{label}{k === "news" && blackout ? <span className="inline-block w-1.5 h-1.5 rounded-full bg-bear ml-1 align-middle" /> : null}
             </button>
           ))}
         </div>
@@ -300,6 +301,7 @@ export default function ChartSidePanel({ symbol, tf, onHide, className = "" }) {
         {b?.sessions?.label && <><span>·</span><span className={b.sessions.open ? "text-bull" : "text-amber-400"}>{b.sessions.label}</span></>}
       </div>
       <div className="flex-1 min-h-0 overflow-y-auto p-3">
+        {tab === "brain" && <BrainPanel b={b} err={err} symbol={sym} />}
         {tab === "log" && <BriefBody b={b} err={err} etf={etf} symbol={sym} />}
         {tab === "news" && <NewsTab symbol={sym} blackout={blackout} />}
         {tab === "levels" && <LevelsTab d={analysis} err={aErr} symbol={sym} />}

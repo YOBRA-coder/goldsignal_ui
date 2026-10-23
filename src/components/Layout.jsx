@@ -10,6 +10,8 @@ import ChartModal from "./ChartModal";
 import { ActivityLog, AlertsFeed, HappeningNow } from "./AlertsBoard";
 import { InstallButton } from "./InstallCard";
 import { applyUpdate, usePwa } from "../lib/pwa";
+import { stateOf } from "../lib/brain";
+import { symbolInfo } from "../lib/constants";
 import { useActivity, useBoard } from "../lib/board";
 import { KIND_STYLE as kindStyle } from "../lib/alertKinds";
 import { ENTRY_TFS } from "../lib/constants";
@@ -140,6 +142,30 @@ function NewsBanner() {
   );
 }
 
+
+/** Shown on every page while a side is tradeable: blinks until it stops being tradeable. */
+function ReadyBanner() {
+  const { live, prefs, openChart } = useLive();
+  const b = live?.signal?.brain;
+  if (!b) return null;
+  const s = ["BUY", "SELL"].map((k) => b.sides[k]).filter((x) => (x.state === "ready" || x.state === "fire")
+    && (x.counter ? prefs.alertCounter !== false : prefs.alertReady !== false)).sort((a, c) => c.pct - a.pct)[0];
+  if (!s) return null;
+  const st = stateOf(s);
+  return (
+    <button type="button" onClick={() => openChart({ symbol: prefs.symbol, tf: prefs.entryTF, title: `${s.direction} ready` })}
+      className={cx("w-full text-left flex items-center gap-3 text-xs rounded-xl border px-3 py-2.5", st.box, s.counter ? "blink-counter" : st.blink)}>
+      <span className={cx("w-2.5 h-2.5 rounded-full bg-current blink-text shrink-0", s.direction === "BUY" ? "text-bull" : "text-bear")} />
+      <span className="min-w-0 flex-1">
+        <b className={s.direction === "BUY" ? "text-bull" : "text-bear"}>{s.direction} {s.state === "fire" ? "signal" : "READY"}</b>
+        <span className="text-gray-200"> {symbolInfo(prefs.symbol).short} · {s.pct}% · {s.counter ? "counter-trend (higher risk)" : "with the trend"}</span>
+        <span className="text-gray-400"> - {s.state === "fire" ? "the engine fired; check the entry is still valid" : "all stages pass; open the chart's BRAIN tab for the checklist"}</span>
+      </span>
+      <span className="text-gold shrink-0">Open</span>
+    </button>
+  );
+}
+
 function StatusBanners() {
   const { error, live, lastUpdate, refresh } = useLive();
   const d = live?.data;
@@ -160,6 +186,7 @@ function StatusBanners() {
           <button onClick={refresh} className="text-xs underline shrink-0">Retry</button>
         </div>
       )}
+      <ReadyBanner />
       <NewsBanner />
       <UpdateBanner />
       {d?.demo && (
