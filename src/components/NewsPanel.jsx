@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { ExternalLink, Newspaper, Plus, RefreshCw, ShieldAlert } from "lucide-react";
+import { ArrowDown, ArrowRight, ArrowUp, ChevronDown, ChevronUp, ClipboardList, ExternalLink, Newspaper, Plus, RefreshCw, ShieldAlert } from "lucide-react";
 import { Link } from "react-router-dom";
 import api from "../api";
 import { Card, Chip, Empty, Segmented, Spinner } from "./ui";
@@ -11,9 +11,59 @@ const IMPACT_TONE = { high: "bear", medium: "amber", low: "gray" };
 const FILTERS = [{ value: "off", label: "Off" }, { value: "high", label: "High impact" }, { value: "all", label: "High + medium" }];
 
 /** One calendar row: when, what, forecast / previous, and (after the release) what price did. */
+const DIR_ICON = { up: <ArrowUp size={12} className="text-bull" />, down: <ArrowDown size={12} className="text-bear" />, none: <ArrowRight size={12} className="text-gray-500" /> };
+const PHASE_TONE = { blackout: "bear", settling: "amber", prepare: "amber", digest: "blue", later: "gray", done: "gray" };
+
+/** "What next" briefing for one event: what to do now, the beat / miss scenarios for the selected pair, a before / during / after plan. */
+function PrepBox({ p }) {
+  return (
+    <div className="mt-2 rounded-xl border border-border bg-panel2/60 p-3 space-y-3 text-xs">
+      <div className="flex items-start gap-2">
+        <Chip tone={PHASE_TONE[p.phase] || "gray"}>{p.phase_label}</Chip>
+        <div className="text-gray-100 leading-snug"><b>Now:</b> {p.now}</div>
+      </div>
+      {p.blackout && p.phase !== "done" && (
+        <div className="text-[11px] text-gray-400">Signals paused {fmtTime(p.blackout.start)} – {fmtTime(p.blackout.end)}.</div>
+      )}
+      {p.result && (
+        <div className={cx("rounded-lg px-2.5 py-2 border", p.result.dir === "up" ? "border-bull/40 bg-bull/10" : p.result.dir === "down" ? "border-bear/40 bg-bear/10" : "border-border bg-panel")}>
+          <div className="text-gray-100 leading-snug">{p.result.text}</div>
+          {p.result.next && <div className="text-gray-300 mt-1 leading-snug"><b>What next:</b> {p.result.next}</div>}
+        </div>
+      )}
+      <div>
+        <div className="text-[10px] uppercase tracking-wide text-gray-500 mb-1">Why it matters</div>
+        <p className="text-gray-300 leading-snug">{p.why}</p>
+        <p className="text-gray-500 leading-snug mt-1">{p.typical}</p>
+      </div>
+      <div>
+        <div className="text-[10px] uppercase tracking-wide text-gray-500 mb-1">Scenarios for {p.pair}</div>
+        <ul className="space-y-1">
+          {p.scenarios.map((sc) => (
+            <li key={sc.case} className="flex items-start gap-1.5 leading-snug">
+              <span className="mt-0.5 shrink-0">{DIR_ICON[sc.dir] || DIR_ICON.none}</span>
+              <span className="text-gray-300"><b className="text-gray-100">{sc.case}</b> ({sc.read}): {sc.text}</span>
+            </li>
+          ))}
+        </ul>
+        <p className="text-[10px] text-gray-600 mt-1">Typical tendencies, not predictions - the first spike often reverses.</p>
+      </div>
+      <div className="grid sm:grid-cols-3 gap-2">
+        {p.checklist.map((c) => (
+          <div key={c.when} className="rounded-lg bg-panel border border-border/70 p-2">
+            <div className="text-[10px] uppercase tracking-wide text-gold mb-1">{c.when}</div>
+            <ul className="space-y-1 list-disc pl-3.5 text-gray-300 leading-snug">{c.items.map((t, i) => <li key={i}>{t}</li>)}</ul>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function EventRow({ e, unit }) {
   const past = e.minutes < 0;
   const r = e.reaction;
+  const [open, setOpen] = useState(false);
   return (
     <li className={cx("py-2 flex gap-2.5", !e.relevant && "opacity-60")}>
       <span className={cx("w-1.5 rounded-full shrink-0 mt-0.5 self-stretch", e.impact === "high" ? "bg-bear" : e.impact === "medium" ? "bg-amber-400" : "bg-gray-600")} />
@@ -39,6 +89,15 @@ export function EventRow({ e, unit }) {
             {r.dir === "up" ? "▲" : "▼"} 30 min after: moved {r.move > 0 ? "+" : ""}{Number(r.move).toFixed(unit)} (range {Number(r.range).toFixed(unit)}
             {r.atr_x ? ` = ${r.atr_x}× a normal 5m candle` : ""})
           </div>
+        )}
+        {e.prep && (
+          <>
+            <button onClick={() => setOpen((o) => !o)} aria-expanded={open}
+              className="mt-1 flex items-center gap-1 text-[11px] text-gold hover:underline">
+              <ClipboardList size={12} /> {past ? "What it meant & what next" : "How to prepare"} {open ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+            </button>
+            {open && <PrepBox p={e.prep} />}
+          </>
         )}
       </div>
     </li>
@@ -165,11 +224,17 @@ export default function NewsPanel({ compact = false }) {
           {!heads.length ? <Empty>No headlines reachable right now (FXStreet / ForexLive feeds).</Empty> : (
             <ul className="divide-y divide-border/60">
               {heads.map((h, i) => (
-                <li key={i} className="py-2">
-                  <a href={h.link} target="_blank" rel="noreferrer" className="text-sm text-gray-200 hover:text-gold leading-snug flex gap-1.5">
-                    <span className="flex-1">{h.major && <Chip tone="amber" className="mr-1.5">key</Chip>}{h.title}</span><ExternalLink size={12} className="shrink-0 mt-1 text-gray-600" />
-                  </a>
-                  <div className="text-[10px] text-gray-600">{h.source} · {fmtAgo(h.ts)}</div>
+                <li key={i} className="py-2.5">
+                  <div className="text-sm text-gray-100 leading-snug font-medium">{h.major && <Chip tone="amber" className="mr-1.5">key</Chip>}{h.title}</div>
+                  {h.summary && <p className="text-xs text-gray-400 leading-relaxed mt-1">{h.summary}</p>}
+                  <div className="flex items-center gap-2 mt-1 text-[10px] text-gray-600">
+                    <span>{h.source} · {fmtAgo(h.ts)}</span>
+                    {h.link && (
+                      <a href={h.link} target="_blank" rel="noreferrer" className="ml-auto text-xs text-gold hover:underline inline-flex items-center gap-1">
+                        Read more <ExternalLink size={11} />
+                      </a>
+                    )}
+                  </div>
                 </li>
               ))}
             </ul>
