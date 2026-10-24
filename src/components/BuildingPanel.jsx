@@ -1,7 +1,7 @@
-import React from "react";
+import React, { useState } from "react";
 import { AlertTriangle, Hourglass, Radar, Split, Zap } from "lucide-react";
 import { Card, Chip } from "./ui";
-import { ApprovalBar, ConfirmMeter, PctRing, ShiftStrip, StagePipeline, StateBadge, ViewToggles } from "./BrainBits";
+import { ApprovalBar, ConfirmMeter, PctRing, ReactionNote, ShiftStrip, StagePipeline, StateBadge, ViewToggles, ZoomBar } from "./BrainBits";
 import { useLive } from "../context/LiveContext";
 import { mmss, stateOf, useNow, useView } from "../lib/brain";
 import { symbolInfo } from "../lib/constants";
@@ -21,19 +21,33 @@ function Row({ icon: Icon, tone, title, note }) {
   );
 }
 
-/** The candle being built right now next to the last five closed ones, with the previous candle's body marked
- *  (an engulfing has to close beyond it) and the zone it is trading in. */
+const FC_ZOOMS = [3, 6, 12, 24, 48];
+
+/** The candle being built right now next to the closed ones before it, with the previous candle's body marked
+ *  (an engulfing has to close beyond it), the zone it is trading in and the plan's stop / target. Zoom −/+ changes how many
+ *  closed candles are shown; the details underneath say what this candle still has to do to count. */
 function FormingCandle({ brain, side, precision, nowMs }) {
+  const [zi, setZi] = useState(1);
   const f = brain.forming;
   if (!f) return null;
-  const closed = (brain.candles || []).slice(-6).map((c) => ({ o: c[1], h: c[2], l: c[3], c: c[4] }));
-  const bars = [...closed, { o: f.o, h: f.h, l: f.l, c: f.c, forming: true }];
+  const pool = (brain.candles || []).map((c) => ({ t: c[0], o: c[1], h: c[2], l: c[3], c: c[4] }));
+  const n = Math.min(FC_ZOOMS[zi], pool.length);
+  const closed = pool.slice(-n);
+  const bars = [...closed, { t: f.open_ts, o: f.o, h: f.h, l: f.l, c: f.c, forming: true }];
   const prev = closed[closed.length - 1];
-  const W = 320, H = 132, padR = 50, padT = 10, padB = 8;
+  const atr = brain.atr || 0;
+  const plan = side?.plan;
+  const W = 320, H = 150, padR = 50, padT = 10, padB = 8;
   let lo = Math.min(...bars.map((b) => b.l)), hi = Math.max(...bars.map((b) => b.h));
   const span0 = Math.max(hi - lo, 1e-9);
   const z = side?.zone && side.zone.top >= lo - span0 && side.zone.bottom <= hi + span0 ? side.zone : null;
   if (z) { lo = Math.min(lo, z.bottom); hi = Math.max(hi, z.top); }
+  const lv = [];
+  if (plan) {
+    [["SL", plan.stop, "#ff4d4f"], ["TP", plan.target, "#12b886"]].forEach(([t, v, c]) => {
+      if (v != null && v >= lo - span0 * 0.6 && v <= hi + span0 * 0.6) { lv.push({ t, v, c }); lo = Math.min(lo, v); hi = Math.max(hi, v); }
+    });
+  }
   const pad = (hi - lo) * 0.08;
   lo -= pad; hi += pad;
   const y = (v) => padT + (1 - (v - lo) / (hi - lo)) * (H - padT - padB);
@@ -41,24 +55,62 @@ function FormingCandle({ brain, side, precision, nowMs }) {
   const left = Math.max(0, f.open_ts + f.step - nowMs / 1000);
   const elapsedPct = Math.min(100, ((f.step - left) / f.step) * 100);
   const buy = side?.direction === "BUY";
+  const rx = brain.fundamentals?.reaction;
+  const nxt = brain.fundamentals?.next;
+
+  // what this candle is doing + what it still has to do
+  const body = Math.abs(f.c - f.o), rng = f.h - f.l;
+  const up = f.c >= f.o;
+  const upW = f.h - Math.max(f.o, f.c), dnW = Math.min(f.o, f.c) - f.l;
+  const pTop = prev ? Math.max(prev.o, prev.c) : null, pBot = prev ? Math.min(prev.o, prev.c) : null;
+  const ap = side?.approval;
+  const need = prev && side ? (buy ? { px: pTop, txt: `close above ${fmtPrice(pTop, precision)} (prev body top)` } : { px: pBot, txt: `close below ${fmtPrice(pBot, precision)} (prev body bottom)` }) : null;
+  const beats = need ? (buy ? f.c > need.px : f.c < need.px) : null;
+  const zd = side?.zone ? (f.c > side.zone.top ? f.c - side.zone.top : f.c < side.zone.bottom ? side.zone.bottom - f.c : 0) : null;
+  const facts = [
+    ["Direction", `${up ? "bullish" : "bearish"} so far${atr > 0 ? ` · body ${(body / atr).toFixed(2)} ATR, range ${(rng / atr).toFixed(2)} ATR` : ""}`, up ? "text-bull" : "text-bear"],
+    ["Wicks", `upper ${fmtPrice(upW, precision)} · lower ${fmtPrice(dnW, precision)}${rng > 0 ? ` (${Math.round((upW / rng) * 100)}% / ${Math.round((dnW / rng) * 100)}% of range)` : ""}`, "text-gray-300"],
+    ["Progress", `${Math.round(elapsedPct)}% done · closes ${fmtTime(f.open_ts + f.step, { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`, "text-gold"],
+  ];
+  if (need) facts.push(["To trigger", `${need.txt} - ${beats ? "ABOVE the line now, must hold to the close" : "not there yet"}`, beats ? (buy ? "text-bull" : "text-bear") : "text-gray-400"]);
+  if (zd != null) facts.push(["Zone", zd === 0 ? "price is inside the zone" : `${fmtPrice(zd, precision)}${atr > 0 ? ` (${(zd / atr).toFixed(1)} ATR)` : ""} from the ${side.direction} zone`, zd === 0 ? "text-gold" : "text-gray-300"]);
+  if (ap && ap.state !== "idle") facts.push(["Approval", ap.detail, "text-gray-300"]);
+  if (plan?.stop != null && plan?.target != null) facts.push(["If it triggers", `stop ${fmtPrice(plan.stop, precision)} · target ${fmtPrice(plan.target, precision)}${plan.reward_r ? ` · ${plan.reward_r}R` : ""}`, "text-gray-300"]);
+  if (nxt && nxt.start > nowMs / 1000) facts.push(["News", `${nxt.label} pauses signals in ${Math.max(0, Math.round((nxt.start - nowMs / 1000) / 60))} min`, "text-amber-400"]);
   return (
     <div>
-      <div className="flex items-center justify-between text-[11px] mb-1">
+      <div className="flex items-center justify-between text-[11px] mb-1 gap-2">
         <span className="text-gray-400 flex items-center gap-1.5"><Hourglass size={12} className="text-gold" /> Candle being built</span>
-        <span className="tabular-nums font-semibold text-gold">{mmss(left)} left</span>
+        <span className="flex items-center gap-2">
+          <ZoomBar onIn={() => setZi((v) => Math.max(0, v - 1))} onOut={() => setZi((v) => Math.min(FC_ZOOMS.length - 1, v + 1))} onFit={() => setZi(1)}
+            canIn={zi > 0} canOut={zi < FC_ZOOMS.length - 1 && FC_ZOOMS[zi] < pool.length} label={`${n}+1`} />
+          <span className="tabular-nums font-semibold text-gold">{mmss(left)} left</span>
+        </span>
       </div>
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full rounded-xl bg-black/20 border border-border" role="img" aria-label="The forming candle next to the last closed candles">
         {z && <rect x="0" width={W - padR} y={y(z.top)} height={Math.max(2, y(z.bottom) - y(z.top))} fill={buy ? "#12b886" : "#ff4d4f"} opacity=".16" />}
-        {prev && [prev.o, prev.c].map((v, i) => <line key={i} x1={bw * 5} x2={W - padR} y1={y(v)} y2={y(v)} stroke="#94a3b8" strokeWidth=".7" strokeDasharray="2 3" />)}
-        {prev && <text x={W - padR + 3} y={y(prev.o) + 3} fontSize="7.5" fill="#94a3b8">prev {prev.c >= prev.o ? "open" : "close"}</text>}
-        {prev && <text x={W - padR + 3} y={y(prev.c) + 3} fontSize="7.5" fill="#94a3b8" opacity={Math.abs(y(prev.c) - y(prev.o)) < 9 ? 0 : 1}>prev {prev.c >= prev.o ? "close" : "open"}</text>}
+        {z && <text x="3" y={y(z.top) + 8} fontSize="7.5" fill={buy ? "#12b886" : "#ff4d4f"} fontWeight="700">{side.direction} zone</text>}
+        {lv.map((l) => (
+          <g key={l.t}>
+            <line x1="0" x2={W - padR} y1={y(l.v)} y2={y(l.v)} stroke={l.c} strokeWidth=".9" strokeDasharray="5 3" opacity=".85" />
+            <text x={W - padR - 3} y={y(l.v) - 2} fontSize="7.5" fill={l.c} textAnchor="end" fontWeight="700">{l.t} {fmtPrice(l.v, precision)}</text>
+          </g>
+        ))}
+        {rx && rx.release_ts >= bars[0].t && rx.base >= lo && rx.base <= hi && (
+          <g><line x1="0" x2={W - padR} y1={y(rx.base)} y2={y(rx.base)} stroke="#a78bfa" strokeWidth=".8" strokeDasharray="4 3" />
+            <text x="3" y={y(rx.base) - 2} fontSize="7.5" fill="#a78bfa">pre-news close</text></g>
+        )}
+        {prev && [pTop, pBot].map((v, i) => <line key={i} x1={bw * (bars.length - 2)} x2={W - padR} y1={y(v)} y2={y(v)} stroke="#94a3b8" strokeWidth=".7" strokeDasharray="2 3" />)}
+        {prev && <text x={W - padR + 3} y={y(pTop) + 3} fontSize="7.5" fill="#94a3b8">prev body top</text>}
+        {prev && <text x={W - padR + 3} y={y(pBot) + 3} fontSize="7.5" fill="#94a3b8" opacity={Math.abs(y(pBot) - y(pTop)) < 9 ? 0 : 1}>prev body bot</text>}
         {bars.map((b, i) => {
-          const up = b.c >= b.o, col = up ? "#12b886" : "#ff4d4f", cx0 = i * bw + bw / 2;
+          const upb = b.c >= b.o, col = upb ? "#12b886" : "#ff4d4f", cx0 = i * bw + bw / 2;
           const top = y(Math.max(b.o, b.c)), bot = y(Math.min(b.o, b.c));
           return (
             <g key={i}>
               <line x1={cx0} x2={cx0} y1={y(b.h)} y2={y(b.l)} stroke={col} strokeWidth={b.forming ? 1.6 : 1} />
-              <rect x={cx0 - cw / 2} y={top} width={cw} height={Math.max(1.5, bot - top)} fill={b.forming ? col : col} fillOpacity={b.forming ? 0.35 : 1} stroke={col} strokeWidth={b.forming ? 1.6 : 0.6} strokeDasharray={b.forming ? "3 2" : undefined} />
+              <rect x={cx0 - cw / 2} y={top} width={cw} height={Math.max(1.5, bot - top)} fill={col} fillOpacity={b.forming ? 0.35 : 1} stroke={col} strokeWidth={b.forming ? 1.6 : 0.6} strokeDasharray={b.forming ? "3 2" : undefined} />
+              <title>{`${fmtTime(b.t, { hour: "2-digit", minute: "2-digit" })} O ${fmtPrice(b.o, precision)} H ${fmtPrice(b.h, precision)} L ${fmtPrice(b.l, precision)} C ${fmtPrice(b.c, precision)}`}</title>
             </g>
           );
         })}
@@ -67,9 +119,15 @@ function FormingCandle({ brain, side, precision, nowMs }) {
       </svg>
       <div className="h-1 rounded-full bg-white/10 mt-1.5 overflow-hidden"><div className="h-full bg-gold/70 rounded-full transition-all" style={{ width: `${elapsedPct}%` }} /></div>
       <div className="flex justify-between text-[10px] text-gray-600 mt-0.5 tabular-nums">
-        <span>O {fmtPrice(f.o, precision)} · H {fmtPrice(f.h, precision)} · L {fmtPrice(f.l, precision)}</span>
-        <span>closes {fmtTime(f.open_ts + f.step, { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</span>
+        <span>O {fmtPrice(f.o, precision)} · H {fmtPrice(f.h, precision)} · L {fmtPrice(f.l, precision)} · C {fmtPrice(f.c, precision)}</span>
+        <span>{brain.tf}</span>
       </div>
+      <dl className="mt-2 space-y-0.5 text-[11px]">
+        {facts.map(([k, v, c]) => (
+          <div key={k} className="flex gap-2"><dt className="text-gray-500 shrink-0 w-[78px]">{k}</dt><dd className={cx("min-w-0 leading-snug", c)}>{v}</dd></div>
+        ))}
+      </dl>
+      {rx && <ReactionNote r={rx} className="mt-2" />}
     </div>
   );
 }
